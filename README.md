@@ -101,10 +101,9 @@ Connections are saved for the duration of the browser session. Click any entry i
 | Wasabi | `https://s3.<region>.wasabisys.com` |
 | DigitalOcean Spaces | `https://<region>.digitaloceanspaces.com` |
 | Backblaze B2 | `https://s3.<region>.backblazeb2.com` |
+| STORJ | https://gateway.storjshare.io |  
 
-...storj ... etc.
-
-Enter the endpoint URL in the **Custom Endpoint** field when adding a connection. Path-style requests are used automatically.
+And others. Enter the endpoint URL in the **Custom Endpoint** field when adding a connection. Path-style requests are used automatically.
 
 ---
 
