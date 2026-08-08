@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S3 Browser</title>
+<script src="https://sdk.amazonaws.com/js/aws-sdk-2.1485.0.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0c0c10;
+  --sur:#13131a;
+  --sur2:#1c1c26;
+  --sur3:#252530;
+  --bdr:#2a2a38;
+  --bdr2:#3a3a4e;
+  --txt:#eeeef5;
+  --txt2:#8888a8;
+  --txt3:#44445a;
+  --acc:#7c5af0;
+  --accL:#a07ef8;
+  --accD:rgba(124,90,240,.14);
+  --fol:#f5a623;
+  --ok:#34d399;
+  --err:#f87171;
+  --warn:#fbbf24;
+  --ui:'Inter',system-ui,sans-serif;
+  --mo:'JetBrains Mono','Fira Code',monospace;
+  --r:6px;--r2:10px;
+}
+
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+
+/* ── Layout ── */
+.app{display:grid;grid-template:"top top"52px"side main"1fr/280px 1fr;height:100vh}
+
+/* ── Topbar ── */
+.topbar{grid-area:top;display:flex;align-items:center;gap:10px;padding:0 20px;background:var(--sur);border-bottom:1px solid var(--bdr);z-index:10}
+.logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:-.02em}
+.logo-box{width:28px;height:28px;background:var(--acc);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.tb-gap{flex:1}
+.badge{display:flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid;transition:all .2s}
+.badge.on{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.25);color:var(--ok)}
+.badge.off{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.25);color:var(--err)}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.icon-btn{width:32px;height:32px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--sur2);color:var(--txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .15s}
+.icon-btn:hover{background:var(--sur3);color:var(--txt);border-color:var(--bdr2)}
+
+/* ── Sidebar ── */
+.sidebar{grid-area:side;background:var(--sur);border-right:1px solid var(--bdr);overflow-y:auto;display:flex;flex-direction:column}
+.s-sec{padding:16px;border-bottom:1px solid var(--bdr)}
+.s-sec:last-child{border-bottom:none}
+.s-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--txt3);margin-bottom:12px}
+.fg{margin-bottom:10px}
+.fg:last-child{margin-bottom:0}
+.fl{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px;font-weight:500}
+.fi{width:100%;padding:7px 10px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);color:var(--txt);font-family:var(--mo);font-size:12px;outline:none;transition:border-color .15s}
+.fi:focus{border-color:var(--acc)}
+.fi::placeholder{color:var(--txt3)}
+.fi-hint{font-size:11px;color:var(--txt3);margin-top:4px}
+select.fi option{background:var(--sur2)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;outline:none;transition:all .15s;white-space:nowrap;line-height:1}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-p{background:var(--acc);color:#fff}
+.btn-p:hover:not(:disabled){background:var(--accL)}
+.btn-s{background:var(--sur2);color:var(--txt);border-color:var(--bdr)}
+.btn-s:hover:not(:disabled){background:var(--sur3);border-color:var(--bdr2)}
+.btn-d{background:rgba(248,113,113,.1);color:var(--err);border-color:rgba(248,113,113,.2)}
+.btn-d:hover:not(:disabled){background:rgba(248,113,113,.2)}
+.btn-g{background:transparent;color:var(--txt2)}
+.btn-g:hover:not(:disabled){background:var(--sur2);color:var(--txt)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-row{display:flex;gap:8px;margin-top:12px}
+
+/* ── Stats ── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px}
+.stat-v{font-family:var(--mo);font-size:17px;font-weight:500;color:var(--txt)}
+.stat-l{font-size:10px;color:var(--txt3);margin-top:2px}
+
+/* ── Main ── */
+.main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Pathbar ── */
+.pathbar{display:flex;align-items:center;padding:0 16px;height:44px;background:var(--sur);border-bottom:1px solid var(--bdr);font-family:var(--mo);font-size:13px;overflow-x:auto;white-space:nowrap;flex-shrink:0;gap:0}
+.pb-prompt{color:var(--accL);margin-right:8px;flex-shrink:0}
+.crumb{color:var(--txt2);cursor:pointer;padding:2px 5px;border-radius:4px;transition:all .1s}
+.crumb:hover{color:var(--txt);background:var(--sur3)}
+.crumb.last{color:var(--txt);cursor:default;pointer-events:none}
+.crumb.last:hover{background:none}
+.crumb-sep{color:var(--txt3);margin:0 1px;flex-shrink:0}
+.cursor{display:inline-block;width:2px;height:14px;background:var(--acc);border-radius:1px;margin-left:4px;vertical-align:middle;animation:blink 1.2s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--sur);border-bottom:1px solid var(--bdr);flex-shrink:0}
+.tb-gap2{flex:1}
+.search-wrap{position:relative;display:flex;align-items:center}
+.search-ico{position:absolute;left:9px;color:var(--txt3);font-size:13px;pointer-events:none}
+.search-in{padding:6px 10px 6px 28px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);color:var(--txt);font-size:13px;outline:none;width:200px;transition:border-color .15s}
+.search-in:focus{border-color:var(--acc)}
+.search-in::placeholder{color:var(--txt3)}
+
+/* ── File Area ── */
+.file-area{flex:1;overflow:auto;position:relative}
+.file-list-header{display:grid;grid-template-columns:44px 1fr 90px 148px 108px;position:sticky;top:0;z-index:5;background:var(--sur2);border-bottom:1px solid var(--bdr)}
+.fh-cell{padding:8px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px;transition:color .1s}
+.fh-cell:hover{color:var(--txt2)}
+.fh-cell.sorted{color:var(--accL)}
+.fh-cell:nth-child(n+3){justify-content:flex-end}
+.fh-cell:first-child{cursor:default}
+
+.file-row{display:grid;grid-template-columns:44px 1fr 90px 148px 108px;align-items:center;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s}
+.file-row:last-child{border-bottom:none}
+.file-row:hover{background:var(--sur2)}
+.file-row.sel{background:var(--accD)}
+
+.fr-check{display:flex;align-items:center;justify-content:center;padding:12px 0 12px 12px}
+.checkbox{width:15px;height:15px;border:1.5px solid var(--bdr2);border-radius:3px;display:flex;align-items:center;justify-content:center;background:var(--sur);transition:all .1s;flex-shrink:0;cursor:pointer}
+.checkbox:hover{border-color:var(--acc)}
+.checkbox.on{background:var(--acc);border-color:var(--acc)}
+.checkbox.on::after{content:'✓';color:#fff;font-size:9px;line-height:1}
+
+.fr-name{display:flex;align-items:center;gap:8px;padding:12px 8px;overflow:hidden}
+.f-icon{font-size:15px;flex-shrink:0}
+.f-name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f-name.folder-name{color:var(--fol)}
+
+.fr-size{padding:12px 10px 12px 0;text-align:right;font-family:var(--mo);font-size:12px;color:var(--txt2)}
+.fr-date{padding:12px 10px 12px 0;text-align:right;font-size:12px;color:var(--txt2)}
+.fr-actions{padding:12px 12px 12px 0;display:flex;justify-content:flex-end;gap:4px;opacity:0;transition:opacity .1s}
+.file-row:hover .fr-actions{opacity:1}
+
+.act-btn{padding:3px 7px;border-radius:4px;border:1px solid var(--bdr);background:var(--sur3);color:var(--txt2);cursor:pointer;font-size:11px;transition:all .1s;line-height:1}
+.act-btn:hover{color:var(--txt);border-color:var(--bdr2)}
+.act-btn.del:hover{color:var(--err);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}
+
+/* ── Empty States ── */
+.state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;height:100%;text-align:center;padding:40px}
+.state-ico{font-size:48px;opacity:.2}
+.state-title{font-size:16px;font-weight:500;color:var(--txt2)}
+.state-desc{font-size:13px;color:var(--txt3);max-width:340px;line-height:1.8}
+
+/* ── Statusbar ── */
+.statusbar{display:flex;align-items:center;gap:12px;padding:6px 16px;background:var(--sur);border-top:1px solid var(--bdr);font-size:12px;color:var(--txt3);flex-shrink:0}
+.sb-gap{flex:1}
+.sb-sel{color:var(--accL);font-size:12px}
+
+/* ── Drop Overlay ── */
+.drop-overlay{position:fixed;inset:0;background:rgba(124,90,240,.12);border:3px dashed var(--acc);z-index:500;display:none;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:var(--accL);pointer-events:none;backdrop-filter:blur(2px)}
+.drop-overlay.on{display:flex}
+
+/* ── Modals ── */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.backdrop.open{display:flex}
+.modal{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r2);padding:24px;width:100%;max-width:440px;box-shadow:0 25px 70px rgba(0,0,0,.5)}
+.m-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.m-title{font-weight:600;font-size:16px}
+.m-close{background:none;border:none;color:var(--txt3);cursor:pointer;font-size:18px;padding:2px;border-radius:4px;line-height:1;transition:color .1s}
+.m-close:hover{color:var(--txt)}
+.m-body{margin-bottom:20px}
+.m-foot{display:flex;justify-content:flex-end;gap:8px}
+
+/* ── Upload ── */
+.upload-list{display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto}
+.u-item{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px}
+.u-head{display:flex;justify-content:space-between;margin-bottom:6px}
+.u-name{font-family:var(--mo);font-size:12px;color:var(--txt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u-pct{font-family:var(--mo);font-size:12px;color:var(--txt2);margin-left:8px;flex-shrink:0}
+.prog{height:3px;background:var(--sur3);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .3s}
+.prog-fill.done{background:var(--ok)}
+.prog-fill.fail{background:var(--err)}
+
+/* ── Share ── */
+.s3-uri{display:block;padding:8px 10px;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);font-family:var(--mo);font-size:11px;color:var(--acc);word-break:break-all;margin-bottom:14px}
+.url-txt{width:100%;padding:10px;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);font-family:var(--mo);font-size:11px;color:var(--txt2);word-break:break-all;resize:none;outline:none;min-height:80px}
+
+/* ── Error / Warn ── */
+.err-box{padding:8px 10px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);border-radius:var(--r);color:var(--err);font-size:12px;margin-top:8px}
+.warn-box{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:var(--r);color:var(--warn);font-size:12px;margin-bottom:12px}
+.sec-note{font-size:12px;color:var(--txt2);line-height:1.7}
+.cors-snippet{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;font-family:var(--mo);font-size:11px;color:var(--txt2);white-space:pre;overflow-x:auto;margin-top:10px}
+
+/* ── Toasts ── */
+.toast-wrap{position:fixed;bottom:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--sur3);border:1px solid var(--bdr);border-radius:var(--r);font-size:13px;color:var(--txt);box-shadow:0 4px 24px rgba(0,0,0,.4);min-width:240px;animation:tin .2s ease;pointer-events:auto}
+@keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.toast.ok{border-left:3px solid var(--ok)}
+.toast.err{border-left:3px solid var(--err)}
+.toast.inf{border-left:3px solid var(--acc)}
+
+/* ── Spinner ── */
+.spin{border:2px solid var(--bdr);border-top-color:var(--acc);border-radius:50%;animation:rot .6s linear infinite;display:inline-block}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ── Misc ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--sur3);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--bdr2)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ─ TOP BAR ─ -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-box">🪣</div>
+      S3 Browser
+    </div>
+    <div class="tb-gap"></div>
+    <div class="badge off" id="badge">Disconnected</div>
+    <button class="icon-btn" title="Help &amp; CORS setup" onclick="showHelp()">?</button>
+  </header>
+
+  <!-- ─ SIDEBAR ─ -->
+  <aside class="sidebar">
+
+    <div class="s-sec hidden" id="https-warn">
+      <div class="warn-box">⚠ Open via HTTPS or localhost for secure credential handling.</div>
+    </div>
+
+    <div class="s-sec">
+      <div class="s-label">Connection</div>
+      <div class="fg">
+        <label class="fl">AWS Access Key ID</label>
+        <input class="fi" id="in-key" type="text" placeholder="AKIAIOSFODNN7EXAMPLE" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fg">
+        <label class="fl">Secret Access Key</label>
+        <input class="fi" id="in-sec" type="password" placeholder="••••••••••••••••" autocomplete="off">
+      </div>
+      <div class="fg">
+        <label class="fl">Region</label>
+        <input class="fi" id="in-reg" type="text" placeholder="us-east-1" value="us-east-1">
+      </div>
+      <div class="fg">
+        <label class="fl">Bucket Name</label>
+        <input class="fi" id="in-bkt" type="text" placeholder="my-bucket" autocomplete="off">
+      </div>
+      <div class="fg">
+        <label class="fl">Custom Endpoint <span style="color:var(--txt3)">(optional)</span></label>
+        <input class="fi" id="in-ep" type="text" placeholder="https://s3.example.com" autocomplete="off">
+        <div class="fi-hint">MinIO · Cloudflare R2 · Wasabi · DigitalOcean Spaces</div>
+      </div>
+      <div class="err-box hidden" id="conn-err"></div>
+      <div class="btn-row">
+        <button class="btn btn-p" id="btn-conn" onclick="connect()">Connect</button>
+        <button class="btn btn-g hidden" id="btn-disc" onclick="disconnect()">Disconnect</button>
+      </div>
+    </div>
+
+    <div class="s-sec hidden" id="stats-sec">
+      <div class="s-label">Bucket Stats</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-v" id="st-files">—</div><div class="stat-l">Files</div></div>
+        <div class="stat-card"><div class="stat-v" id="st-folders">—</div><div class="stat-l">Folders</div></div>
+        <div class="stat-card" style="grid-column:1/-1"><div class="stat-v" id="st-size">—</div><div class="stat-l">Total in view</div></div>
+      </div>
+    </div>
+
+    <div class="s-sec" style="margin-top:auto">
+      <div class="s-label">Security</div>
+      <p class="sec-note">🔒 Credentials are stored in <strong>session memory only</strong> — automatically cleared when you close this tab. Never written to disk or localStorage.</p>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-d" onclick="clearSession()">Clear Session</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ─ MAIN ─ -->
+  <main class="main">
+
+    <div class="pathbar" id="pathbar">
+      <span class="pb-prompt">~</span>
+      <span class="crumb last">Connect to a bucket to get started</span>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn btn-p btn-sm" id="btn-up" onclick="triggerUpload()" disabled>↑ Upload</button>
+      <button class="btn btn-s btn-sm" id="btn-mkdir" onclick="showMkdir()" disabled>+ Folder</button>
+      <button class="btn btn-d btn-sm hidden" id="btn-del-sel" onclick="deleteSelected()">🗑 Delete</button>
+      <div class="tb-gap2"></div>
+      <div class="search-wrap">
+        <span class="search-ico">⌕</span>
+        <input class="search-in" id="search" type="text" placeholder="Filter files…" oninput="applyFilter()">
+      </div>
+      <button class="icon-btn" id="btn-ref" title="Refresh (F5)" onclick="refresh()">⟳</button>
+    </div>
+
+    <div class="file-area" id="file-area">
+
+      <div class="state" id="s-connect">
+        <div class="state-ico">🪣</div>
+        <div class="state-title">No bucket connected</div>
+        <div class="state-desc">Enter your AWS credentials in the sidebar and click Connect. Need CORS help? Click the ? button.</div>
+      </div>
+
+      <div class="state hidden" id="s-load">
+        <div class="spin" style="width:36px;height:36px;border-width:3px"></div>
+        <div class="state-title">Loading…</div>
+      </div>
+
+      <div class="state hidden" id="s-empty">
+        <div class="state-ico">📭</div>
+        <div class="state-title">Nothing here</div>
+        <div class="state-desc">This folder is empty. Drag files onto the window or click Upload to add files.</div>
+      </div>
+
+      <div class="hidden" id="s-list">
+        <div class="file-list-header">
+          <div class="fh-cell" style="cursor:pointer" onclick="selectAll()">
+            <div class="checkbox" id="check-all"></div>
+          </div>
+          <div class="fh-cell sorted" id="fh-name" onclick="setSort('name')">Name <span id="sort-name">↑</span></div>
+          <div class="fh-cell" id="fh-size" onclick="setSort('size')">Size <span id="sort-size"></span></div>
+          <div class="fh-cell" id="fh-date" onclick="setSort('date')">Modified <span id="sort-date"></span></div>
+          <div class="fh-cell" style="cursor:default"></div>
+        </div>
+        <div id="file-list-body"></div>
+        <div id="truncated-note" class="hidden" style="text-align:center;padding:12px;font-size:12px;color:var(--txt3)">
+          ⚠ Showing first 1 000 items. Use a prefix to navigate deeper.
+        </div>
+      </div>
+
+    </div>
+
+    <div class="statusbar">
+      <span id="sb-info">—</span>
+      <div class="sb-gap"></div>
+      <span class="sb-sel hidden" id="sb-sel"></span>
+    </div>
+
+  </main>
+
+</div>
+
+<!-- Drop overlay -->
+<div class="drop-overlay" id="drop-overlay">↑ Drop files to upload</div>
+
+<!-- Hidden file input -->
+<input type="file" id="file-in" multiple style="display:none" onchange="handleFileInput()">
+
+<!-- ══════ MODALS ══════ -->
+
+<!-- Delete confirm -->
+<div class="backdrop" id="md-del">
+  <div class="modal">
+    <div class="m-head"><div class="m-title">Confirm Delete</div><button class="m-close" onclick="closeModal('md-del')">✕</button></div>
+    <div class="m-body" id="md-del-msg"></div>
+    <div class="m-foot">
+      <button class="btn btn-g" onclick="closeModal('md-del')">Cancel</button>
+      <button class="btn btn-d" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create folder -->
+<div class="backdrop" id="md-mkdir">
+  <div class="modal">
+    <div class="m-head"><div class="m-title">Create Folder</div><button class="m-close" onclick="closeModal('md-mkdir')">✕</button></div>
+    <div class="m-body">
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Folder Name</label>
+        <input class="fi" id="mkdir-name" type="text" placeholder="my-folder" onkeydown="if(event.key==='Enter')doMkdir()">
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" onclick="closeModal('md-mkdir')">Cancel</button>
+      <button class="btn btn-p" onclick="doMkdir()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share / Presigned URL -->
+<div class="backdrop" id="md-share">
+  <div class="modal">
+    <div class="m-head"><div class="m-title">Share File</div><button class="m-close" onclick="closeModal('md-share')">✕</button></div>
+    <div class="m-body">
+      <div class="fg">
+        <label class="fl">Link Expiry</label>
+        <select class="fi" id="share-expiry" onchange="genPresign()">
+          <option value="900">15 minutes</option>
+          <option value="3600" selected>1 hour</option>
+          <option value="86400">24 hours</option>
+          <option value="604800">7 days</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">S3 URI</label>
+        <span class="s3-uri" id="share-s3uri"></span>
+      </div>
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Presigned URL</label>
+        <textarea class="url-txt" id="share-url" readonly></textarea>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-s" onclick="genPresign()">⟳ Regenerate</button>
+      <button class="btn btn-p" onclick="copyPresign()">Copy URL</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload progress -->
+<div class="backdrop" id="md-upload">
+  <div class="modal">
+    <div class="m-head"><div class="m-title">Uploading Files</div></div>
+    <div class="m-body"><div class="upload-list" id="upload-list"></div></div>
+    <div class="m-foot">
+      <button class="btn btn-g" id="btn-upload-close" disabled onclick="closeModal('md-upload');refresh()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help -->
+<div class="backdrop" id="md-help">
+  <div class="modal" style="max-width:520px">
+    <div class="m-head"><div class="m-title">Help &amp; Setup</div><button class="m-close" onclick="closeModal('md-help')">✕</button></div>
+    <div class="m-body" style="font-size:13px;line-height:1.8;color:var(--txt2)">
+      <strong style="color:var(--txt)">CORS Configuration (required for browser access)</strong><br>
+      In AWS Console → S3 → Your Bucket → Permissions → CORS:
+      <pre class="cors-snippet">[{
+  "AllowedHeaders": ["*"],
+  "AllowedMethods": ["GET","PUT","POST","DELETE","HEAD"],
+  "AllowedOrigins": ["*"],
+  "ExposeHeaders": ["ETag"]
+}]</pre>
+      <br>
+      <strong style="color:var(--txt)">Minimum IAM Permissions</strong><br>
+      <code style="font-family:var(--mo);font-size:12px;color:var(--accL)">s3:ListBucket, s3:GetObject, s3:PutObject, s3:DeleteObject</code>
+      <br><br>
+      <strong style="color:var(--txt)">S3-Compatible Services</strong><br>
+      Enter the endpoint URL for MinIO, Cloudflare R2, Wasabi, DigitalOcean Spaces, etc. Path-style requests are used automatically.
+      <br><br>
+      <strong style="color:var(--txt)">Keyboard Shortcuts</strong><br>
+      <span style="font-family:var(--mo);font-size:12px">
+        Ctrl/⌘ A &nbsp;— Select all &nbsp;&nbsp; Delete — Delete selected<br>
+        F5 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;— Refresh &nbsp;&nbsp;&nbsp; Escape — Close dialogs
+      </span>
+      <br><br>
+      <strong style="color:var(--txt)">Security</strong><br>
+      Credentials are stored in <code style="font-family:var(--mo);font-size:12px;color:var(--accL)">sessionStorage</code> only — never written to localStorage or disk. They are cleared automatically when this tab is closed.
+    </div>
+    <div class="m-foot"><button class="btn btn-p" onclick="closeModal('md-help')">Got it</button></div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- ══════════════════════════════════════════════════
+     SCRIPT
+══════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let S3 = null;
+let bucket = '', prefix = '';
+let rawFolders = [], rawFiles = [];
+let items = [];          // currently rendered (filtered + sorted)
+let selKeys = new Set(); // selected S3 keys
+let sortKey = 'name', sortDir = 'asc';
+let filterQ = '';
+let pendingDelKeys = [];
+let shareKey = '';
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // HTTPS check
+  const host = location.hostname;
+  if (location.protocol !== 'https:' && host !== 'localhost' && host !== '127.0.0.1') {
+    el('https-warn').classList.remove('hidden');
+  }
+
+  // Restore session
+  const c = loadCreds();
+  if (c) {
+    set('in-key', c.key || '');
+    set('in-sec', c.sec || '');
+    set('in-reg', c.reg || 'us-east-1');
+    set('in-bkt', c.bkt || '');
+    set('in-ep',  c.ep  || '');
+    if (c.key && c.sec && c.bkt) connect(true);
+  }
+
+  setupDrop();
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') $$('.backdrop.open').forEach(b => b.classList.remove('open'));
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a' && S3) { e.preventDefault(); selectAll(); }
+    if (e.key === 'Delete' && selKeys.size > 0 && S3) deleteSelected();
+    if (e.key === 'F5'     && S3) { e.preventDefault(); refresh(); }
+  });
+
+  $$('.backdrop').forEach(b => b.addEventListener('click', e => {
+    if (e.target === b) b.classList.remove('open');
+  }));
+});
+
+// ─────────────────────────────────────────────
+//  CREDENTIALS
+// ─────────────────────────────────────────────
+function loadCreds() {
+  try { return JSON.parse(sessionStorage.getItem('s3b')) || null; } catch { return null; }
+}
+function saveCreds(o) {
+  try { sessionStorage.setItem('s3b', JSON.stringify(o)); } catch {}
+}
+function clearSession() {
+  sessionStorage.removeItem('s3b');
+  ['in-key','in-sec','in-bkt','in-ep'].forEach(id => el(id).value = '');
+  disconnect();
+  toast('Session cleared', 'inf');
+}
+
+// ─────────────────────────────────────────────
+//  CONNECT / DISCONNECT
+// ─────────────────────────────────────────────
+async function connect(silent = false) {
+  const key = g('in-key'), sec = g('in-sec');
+  const reg = g('in-reg') || 'us-east-1';
+  const bkt = g('in-bkt'), ep = g('in-ep');
+
+  el('conn-err').classList.add('hidden');
+  if (!key) return errConn('Access Key ID is required');
+  if (!sec) return errConn('Secret Access Key is required');
+  if (!bkt) return errConn('Bucket name is required');
+
+  const cfg = { accessKeyId: key, secretAccessKey: sec, region: reg, signatureVersion: 'v4' };
+  if (ep) { cfg.endpoint = ep; cfg.s3ForcePathStyle = true; }
+
+  AWS.config.update(cfg);
+  S3 = new AWS.S3();
+  bucket = bkt;
+  prefix = '';
+
+  saveCreds({ key, sec, reg, bkt, ep });
+  setUI(true);
+  await load();
+  if (!silent) toast(`Connected to "${bkt}"`, 'ok');
+}
+
+function disconnect() {
+  S3 = null; bucket = ''; prefix = '';
+  rawFolders = []; rawFiles = []; items = []; selKeys.clear();
+  setUI(false);
+  showState('s-connect');
+  buildPathbar();
+}
+
+function setUI(on) {
+  const b = el('badge');
+  b.className = 'badge ' + (on ? 'on' : 'off');
+  b.textContent = on ? `${bucket}` : 'Disconnected';
+  el('btn-conn').classList.toggle('hidden', on);
+  el('btn-disc').classList.toggle('hidden', !on);
+  el('btn-up').disabled = !on;
+  el('btn-mkdir').disabled = !on;
+  el('stats-sec').classList.toggle('hidden', !on);
+  if (!on) { setStats(0, 0, 0); updateSelUI(); }
+}
+
+function errConn(msg) { el('conn-err').textContent = msg; el('conn-err').classList.remove('hidden'); }
+
+// ─────────────────────────────────────────────
+//  LOAD
+// ─────────────────────────────────────────────
+async function load() {
+  if (!S3) return;
+  showState('s-load');
+  selKeys.clear();
+  updateSelUI();
+
+  try {
+    const data = await s3api('listObjectsV2', {
+      Bucket: bucket, Prefix: prefix, Delimiter: '/', MaxKeys: 1000
+    });
+
+    rawFolders = (data.CommonPrefixes || []).map(cp => ({
+      type: 'folder',
+      key: cp.Prefix,
+      name: cp.Prefix.slice(prefix.length).replace(/\/$/, ''),
+      size: null,
+      date: null,
+    }));
+
+    rawFiles = (data.Contents || [])
+      .filter(o => o.Key !== prefix)
+      .map(o => ({
+        type: 'file',
+        key: o.Key,
+        name: o.Key.slice(prefix.length),
+        size: o.Size,
+        date: o.LastModified,
+      }));
+
+    el('truncated-note').classList.toggle('hidden', !data.IsTruncated);
+    setStats(rawFiles.length, rawFolders.length, rawFiles.reduce((s, f) => s + (f.size || 0), 0));
+    render();
+    buildPathbar();
+
+  } catch (err) {
+    showState('s-connect');
+    let msg = err.message || 'Unknown error';
+    if (/CORS|Network|fetch|XMLHttp/i.test(msg)) {
+      msg = 'CORS error — your bucket needs cross-origin rules. Click ? for the CORS config to paste into AWS.';
+    }
+    toast(msg, 'err');
+  }
+}
+
+async function refresh() {
+  if (!S3) return;
+  const b = el('btn-ref');
+  b.style.transition = 'transform .5s';
+  b.style.transform = 'rotate(360deg)';
+  setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 500);
+  await load();
+}
+
+// ─────────────────────────────────────────────
+//  RENDER
+// ─────────────────────────────────────────────
+function render() {
+  const q = filterQ.toLowerCase();
+
+  let ff = rawFolders.filter(f => !q || f.name.toLowerCase().includes(q));
+  let ft = rawFiles.filter(f => !q || f.name.toLowerCase().includes(q));
+
+  // Sort files
+  ft.sort((a, b) => {
+    let d = 0;
+    if (sortKey === 'name') d = a.name.localeCompare(b.name);
+    else if (sortKey === 'size') d = (a.size || 0) - (b.size || 0);
+    else if (sortKey === 'date') d = +new Date(a.date) - +new Date(b.date);
+    return sortDir === 'asc' ? d : -d;
+  });
+
+  // Folders always alphabetical
+  ff.sort((a, b) => a.name.localeCompare(b.name));
+
+  items = [...ff, ...ft];
+
+  if (!items.length) { showState('s-empty'); return; }
+  showState('s-list');
+
+  const body = el('file-list-body');
+  body.innerHTML = '';
+
+  items.forEach((item, i) => {
+    const sel = selKeys.has(item.key);
+    const row = document.createElement('div');
+    row.className = 'file-row' + (sel ? ' sel' : '');
+    row.dataset.i = i;
+
+    row.innerHTML = `
+      <div class="fr-check">
+        <div class="checkbox${sel ? ' on' : ''}"></div>
+      </div>
+      <div class="fr-name">
+        <span class="f-icon">${fileIcon(item)}</span>
+        <span class="f-name${item.type === 'folder' ? ' folder-name' : ''}">${x(item.name)}${item.type === 'folder' ? '/' : ''}</span>
+      </div>
+      <div class="fr-size">${item.type === 'folder' ? '—' : fmtSize(item.size)}</div>
+      <div class="fr-date">${item.date ? fmtDate(item.date) : '—'}</div>
+      <div class="fr-actions">
+        ${item.type === 'file'
+          ? `<button class="act-btn" data-a="dl" title="Download">↓</button>
+             <button class="act-btn" data-a="sh" title="Get share link">⎘</button>
+             <button class="act-btn del" data-a="rm" title="Delete">✕</button>`
+          : `<button class="act-btn del" data-a="rm" title="Delete folder">✕</button>`}
+      </div>`;
+
+    // Checkbox click
+    row.querySelector('.fr-check').addEventListener('click', e => {
+      e.stopPropagation();
+      toggleSel(item.key);
+    });
+
+    // Row click → navigate folder
+    row.addEventListener('click', e => {
+      if (e.target.closest('.fr-check') || e.target.closest('[data-a]')) return;
+      if (item.type === 'folder') {
+        prefix = item.key;
+        selKeys.clear();
+        load();
+      }
+    });
+
+    // Action buttons
+    row.querySelectorAll('[data-a]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const a = btn.dataset.a;
+        if (a === 'dl') downloadItem(item);
+        else if (a === 'sh') showShare(item);
+        else if (a === 'rm') askDelete([item.key]);
+      });
+    });
+
+    body.appendChild(row);
+  });
+
+  // Status bar
+  const totalSz = ft.reduce((s, f) => s + (f.size || 0), 0);
+  el('sb-info').textContent = `${ff.length} folder${ff.length !== 1 ? 's' : ''}, ${ft.length} file${ft.length !== 1 ? 's' : ''} — ${fmtSize(totalSz)}`;
+  updateSelUI();
+}
+
+// ─────────────────────────────────────────────
+//  PATHBAR
+// ─────────────────────────────────────────────
+function buildPathbar() {
+  const pb = el('pathbar');
+  if (!bucket) {
+    pb.innerHTML = '<span class="pb-prompt">~</span><span class="crumb last">Connect to a bucket to get started</span>';
+    return;
+  }
+
+  pb.innerHTML = '';
+  const prompt = document.createElement('span');
+  prompt.className = 'pb-prompt'; prompt.textContent = '~';
+  pb.appendChild(prompt);
+
+  // Bucket root crumb
+  const rootCrumb = document.createElement('span');
+  rootCrumb.className = 'crumb';
+  rootCrumb.textContent = bucket;
+  rootCrumb.addEventListener('click', () => { prefix = ''; selKeys.clear(); load(); });
+  pb.appendChild(rootCrumb);
+
+  if (prefix) {
+    const parts = prefix.split('/').filter(Boolean);
+    let acc = '';
+    parts.forEach((part, i) => {
+      acc += part + '/';
+      const sep = document.createElement('span');
+      sep.className = 'crumb-sep'; sep.textContent = '/';
+      pb.appendChild(sep);
+
+      const crumb = document.createElement('span');
+      const isLast = i === parts.length - 1;
+      crumb.className = 'crumb' + (isLast ? ' last' : '');
+      crumb.textContent = part;
+      if (!isLast) {
+        const captured = acc;
+        crumb.addEventListener('click', () => { prefix = captured; selKeys.clear(); load(); });
+      }
+      pb.appendChild(crumb);
+    });
+  }
+
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  pb.appendChild(cursor);
+}
+
+function showState(id) {
+  ['s-connect','s-load','s-empty','s-list'].forEach(s =>
+    el(s).classList.toggle('hidden', s !== id));
+}
+
+// ─────────────────────────────────────────────
+//  SELECTION
+// ─────────────────────────────────────────────
+function toggleSel(key) {
+  if (selKeys.has(key)) selKeys.delete(key);
+  else selKeys.add(key);
+  syncRowStyles();
+  updateSelUI();
+}
+
+function selectAll() {
+  if (selKeys.size === items.length) selKeys.clear();
+  else items.forEach(item => selKeys.add(item.key));
+  syncRowStyles();
+  updateSelUI();
+}
+
+function syncRowStyles() {
+  $$('.file-row').forEach(row => {
+    const item = items[+row.dataset.i];
+    if (!item) return;
+    const on = selKeys.has(item.key);
+    row.classList.toggle('sel', on);
+    row.querySelector('.checkbox').className = 'checkbox' + (on ? ' on' : '');
+  });
+}
+
+function updateSelUI() {
+  const n = selKeys.size, total = items.length;
+  const ca = el('check-all');
+  if (ca) ca.className = 'checkbox' + (n > 0 && n === total ? ' on' : '');
+  el('btn-del-sel').classList.toggle('hidden', n === 0);
+  const sbs = el('sb-sel');
+  if (n > 0) { sbs.textContent = `${n} selected`; sbs.classList.remove('hidden'); }
+  else sbs.classList.add('hidden');
+}
+
+// ─────────────────────────────────────────────
+//  SORT & FILTER
+// ─────────────────────────────────────────────
+function setSort(k) {
+  if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortKey = k; sortDir = 'asc'; }
+
+  ['name','size','date'].forEach(c => {
+    el(`fh-${c}`).classList.toggle('sorted', c === k);
+    el(`sort-${c}`).textContent = c === k ? (sortDir === 'asc' ? '↑' : '↓') : '';
+  });
+  render();
+}
+
+function applyFilter() { filterQ = el('search').value; render(); }
+
+// ─────────────────────────────────────────────
+//  UPLOAD
+// ─────────────────────────────────────────────
+function triggerUpload() { el('file-in').click(); }
+
+function handleFileInput() {
+  const inp = el('file-in');
+  if (inp.files.length) { doUpload([...inp.files]); inp.value = ''; }
+}
+
+async function doUpload(files) {
+  if (!S3 || !files.length) return;
+  openModal('md-upload');
+  el('upload-list').innerHTML = '';
+  el('btn-upload-close').disabled = true;
+
+  await Promise.all(files.map(file => new Promise(resolve => {
+    const uid = 'u' + Math.random().toString(36).slice(2);
+    el('upload-list').insertAdjacentHTML('beforeend', `
+      <div class="u-item">
+        <div class="u-head">
+          <span class="u-name">${x(file.name)}</span>
+          <span class="u-pct" id="${uid}-p">0%</span>
+        </div>
+        <div class="prog"><div class="prog-fill" id="${uid}-b" style="width:0"></div></div>
+      </div>`);
+
+    const upload = S3.upload({
+      Bucket: bucket,
+      Key: prefix + file.name,
+      Body: file,
+      ContentType: file.type || 'application/octet-stream',
+    });
+
+    upload.on('httpUploadProgress', p => {
+      const pct = p.total ? Math.round(p.loaded / p.total * 100) : 0;
+      const pEl = el(`${uid}-p`), bEl = el(`${uid}-b`);
+      if (pEl) pEl.textContent = pct + '%';
+      if (bEl) bEl.style.width = pct + '%';
+    });
+
+    upload.promise()
+      .then(() => {
+        const bEl = el(`${uid}-b`), pEl = el(`${uid}-p`);
+        if (bEl) { bEl.style.width = '100%'; bEl.classList.add('done'); }
+        if (pEl) pEl.textContent = '✓';
+      })
+      .catch(() => {
+        const bEl = el(`${uid}-b`), pEl = el(`${uid}-p`);
+        if (bEl) bEl.classList.add('fail');
+        if (pEl) pEl.textContent = '✗';
+      })
+      .finally(resolve);
+  })));
+
+  el('btn-upload-close').disabled = false;
+  toast(`${files.length} file${files.length !== 1 ? 's' : ''} uploaded`, 'ok');
+}
+
+// ─────────────────────────────────────────────
+//  DOWNLOAD
+// ─────────────────────────────────────────────
+function downloadItem(item) {
+  const url = S3.getSignedUrl('getObject', {
+    Bucket: bucket, Key: item.key, Expires: 60,
+    ResponseContentDisposition: `attachment; filename="${encodeURIComponent(item.name)}"`,
+  });
+  Object.assign(document.createElement('a'), { href: url, download: item.name, target: '_blank' }).click();
+  toast('Download started', 'ok');
+}
+
+// ─────────────────────────────────────────────
+//  DELETE
+// ─────────────────────────────────────────────
+function askDelete(keys) {
+  pendingDelKeys = keys;
+  const msgEl = el('md-del-msg');
+  if (keys.length === 1) {
+    const item = items.find(i => i.key === keys[0]) || { name: keys[0], type: 'file' };
+    const isDir = item.type === 'folder';
+    msgEl.innerHTML = `
+      <p>Delete <strong style="font-family:var(--mo);color:var(--err)">${x(item.name)}${isDir ? '/' : ''}</strong>?</p>
+      ${isDir ? `<p style="font-size:12px;color:var(--txt2);margin-top:8px">Only the folder placeholder is deleted. Objects inside must be removed separately.</p>` : ''}
+      <p style="font-size:12px;color:var(--txt3);margin-top:8px">This action cannot be undone.</p>`;
+  } else {
+    msgEl.innerHTML = `<p>Delete <strong>${keys.length}</strong> items?</p><p style="font-size:12px;color:var(--txt3);margin-top:8px">This action cannot be undone.</p>`;
+  }
+  openModal('md-del');
+}
+
+function deleteSelected() {
+  if (selKeys.size) askDelete([...selKeys]);
+}
+
+async function confirmDelete() {
+  closeModal('md-del');
+  try {
+    if (pendingDelKeys.length === 1) {
+      await s3api('deleteObject', { Bucket: bucket, Key: pendingDelKeys[0] });
+    } else {
+      await s3api('deleteObjects', {
+        Bucket: bucket,
+        Delete: { Objects: pendingDelKeys.map(k => ({ Key: k })), Quiet: true }
+      });
+    }
+    selKeys.clear();
+    pendingDelKeys = [];
+    toast('Deleted successfully', 'ok');
+    await load();
+  } catch (err) {
+    toast('Delete failed: ' + err.message, 'err');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  CREATE FOLDER
+// ─────────────────────────────────────────────
+function showMkdir() {
+  el('mkdir-name').value = '';
+  openModal('md-mkdir');
+  setTimeout(() => el('mkdir-name').focus(), 60);
+}
+
+async function doMkdir() {
+  const name = el('mkdir-name').value.trim().replace(/\/+$/, '');
+  if (!name) return;
+  const key = prefix + name + '/';
+  try {
+    await s3api('putObject', { Bucket: bucket, Key: key, Body: '', ContentType: 'application/x-directory' });
+    closeModal('md-mkdir');
+    toast(`Folder "${name}" created`, 'ok');
+    await load();
+  } catch (err) {
+    toast('Failed: ' + err.message, 'err');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  SHARE / PRESIGNED URL
+// ─────────────────────────────────────────────
+function showShare(item) {
+  shareKey = item.key;
+  el('share-s3uri').textContent = `s3://${bucket}/${item.key}`;
+  openModal('md-share');
+  genPresign();
+}
+
+function genPresign() {
+  if (!S3 || !shareKey) return;
+  const exp = parseInt(el('share-expiry').value);
+  const url = S3.getSignedUrl('getObject', { Bucket: bucket, Key: shareKey, Expires: exp });
+  el('share-url').value = url;
+}
+
+function copyPresign() {
+  const url = el('share-url').value;
+  if (!url) return;
+  navigator.clipboard.writeText(url)
+    .then(() => toast('URL copied to clipboard!', 'ok'))
+    .catch(() => { el('share-url').select(); document.execCommand('copy'); toast('URL copied!', 'ok'); });
+}
+
+// ─────────────────────────────────────────────
+//  DRAG & DROP
+// ─────────────────────────────────────────────
+function setupDrop() {
+  const overlay = el('drop-overlay');
+  let n = 0;
+  document.addEventListener('dragenter', e => { e.preventDefault(); n++; if (S3) overlay.classList.add('on'); });
+  document.addEventListener('dragleave', () => { if (--n <= 0) { n = 0; overlay.classList.remove('on'); } });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault(); n = 0; overlay.classList.remove('on');
+    if (!S3) return;
+    const files = [...e.dataTransfer.files].filter(f => f.size > 0);
+    if (files.length) doUpload(files);
+  });
+}
+
+// ─────────────────────────────────────────────
+//  MODALS
+// ─────────────────────────────────────────────
+function openModal(id)  { el(id).classList.add('open'); }
+function closeModal(id) { el(id).classList.remove('open'); }
+function showHelp() { openModal('md-help'); }
+
+// ─────────────────────────────────────────────
+//  TOASTS
+// ─────────────────────────────────────────────
+function toast(msg, type = 'inf') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${{ok:'✓', err:'✗', inf:'ℹ'}[type]||'ℹ'}</span> ${x(msg)}`;
+  el('toast-wrap').appendChild(t);
+  setTimeout(() => {
+    t.style.cssText = 'opacity:0;transition:opacity .3s';
+    setTimeout(() => t.remove(), 300);
+  }, 3000);
+}
+
+// ─────────────────────────────────────────────
+//  UTILITIES
+// ─────────────────────────────────────────────
+const ICONS = {
+  // Images
+  jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',svg:'🖼️',webp:'🖼️',bmp:'🖼️',ico:'🖼️',avif:'🖼️',tiff:'🖼️',
+  // Video
+  mp4:'🎬',mov:'🎬',avi:'🎬',mkv:'🎬',webm:'🎬',m4v:'🎬',flv:'🎬',wmv:'🎬',ts:'🎬',
+  // Audio
+  mp3:'🎵',wav:'🎵',ogg:'🎵',m4a:'🎵',flac:'🎵',aac:'🎵',opus:'🎵',wma:'🎵',
+  // Archives
+  zip:'📦',tar:'📦',gz:'📦',bz2:'📦','7z':'📦',rar:'📦',tgz:'📦',xz:'📦',zst:'📦',
+  // Documents
+  pdf:'📑',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',ppt:'📋',pptx:'📋',odt:'📝',ods:'📊',odp:'📋',
+  // Code / web
+  js:'⚙️',mjs:'⚙️',jsx:'⚙️',tsx:'⚙️',py:'⚙️',go:'⚙️',rs:'⚙️',java:'⚙️',
+  c:'⚙️',cpp:'⚙️',h:'⚙️',hpp:'⚙️',cs:'⚙️',php:'⚙️',rb:'⚙️',swift:'⚙️',kt:'⚙️',
+  scala:'⚙️',r:'⚙️',dart:'⚙️',lua:'⚙️',ex:'⚙️',exs:'⚙️',
+  html:'🌐',htm:'🌐',css:'🎨',scss:'🎨',less:'🎨',sass:'🎨',
+  // Data
+  json:'📊',jsonl:'📊',xml:'📊',yaml:'📊',yml:'📊',csv:'📊',tsv:'📊',parquet:'📊',
+  sql:'🗄️',db:'🗄️',sqlite:'🗄️',sqlite3:'🗄️',
+  // Config / text
+  txt:'📄',md:'📄',rst:'📄',log:'📄',
+  env:'🔑',ini:'🔑',conf:'🔑',toml:'🔑',cfg:'🔑',properties:'🔑',
+  // Scripts / executables
+  sh:'🔧',bash:'🔧',zsh:'🔧',fish:'🔧',ps1:'🔧',bat:'🔧',cmd:'🔧',
+  exe:'💾',dmg:'💾',pkg:'💾',deb:'💾',rpm:'💾',apk:'💾',ipa:'💾',
+  // Fonts
+  ttf:'🔠',otf:'🔠',woff:'🔠',woff2:'🔠',
+  // Certs / keys
+  pem:'🔐',crt:'🔐',cer:'🔐',key:'🔐',p12:'🔐',pfx:'🔐',
+};
+
+function fileIcon(item) {
+  if (item.type === 'folder') return '📁';
+  const ext = item.name.split('.').pop().toLowerCase();
+  return ICONS[ext] || '📄';
+}
+
+function fmtSize(b) {
+  if (b === null || b === undefined) return '—';
+  if (b === 0) return '0 B';
+  const u = ['B','KB','MB','GB','TB'];
+  const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), 4);
+  return `${(b / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
+}
+
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+}
+
+function x(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function el(id)    { return document.getElementById(id); }
+function $$(sel)   { return document.querySelectorAll(sel); }
+function g(id)     { return el(id).value.trim(); }
+function set(id,v) { el(id).value = v; }
+
+function s3api(method, params) {
+  return new Promise((res, rej) => S3[method](params, (err, data) => err ? rej(err) : res(data)));
+}
+
+function setStats(files, folders, sz) {
+  el('st-files').textContent   = files.toLocaleString();
+  el('st-folders').textContent = folders.toLocaleString();
+  el('st-size').textContent    = fmtSize(sz);
+}
+</script>
+</body>
+</html>
