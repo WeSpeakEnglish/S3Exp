@@ -204,6 +204,23 @@ select.fi option{background:var(--sur2)}
 ::-webkit-scrollbar-thumb{background:var(--sur3);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--bdr2)}
 .hidden{display:none!important}
+
+/* ── Bucket List ── */
+.bkt-list-wrap{display:flex;flex-direction:column;gap:6px}
+.bkt-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--sur2);cursor:pointer;transition:all .15s;position:relative}
+.bkt-item:hover{border-color:var(--bdr2);background:var(--sur3)}
+.bkt-item.active{border-color:rgba(124,90,240,.5);background:var(--accD)}
+.bkt-dot{width:7px;height:7px;border-radius:50%;background:var(--bdr2);flex-shrink:0;transition:background .2s}
+.bkt-dot.on{background:var(--ok)}
+.bkt-lbl{flex:1;overflow:hidden;min-width:0}
+.bkt-name{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
+.bkt-sub{font-size:11px;color:var(--txt3);font-family:var(--mo);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.bkt-rm{background:none;border:none;color:transparent;cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;line-height:1;flex-shrink:0;transition:color .1s}
+.bkt-item:hover .bkt-rm{color:var(--txt3)}
+.bkt-rm:hover{color:var(--err)!important}
+.bkt-empty{font-size:12px;color:var(--txt3);line-height:1.8;padding:2px 0}
+.s-label-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.s-label-row .s-label{margin-bottom:0}
 </style>
 </head>
 <body>
@@ -229,32 +246,12 @@ select.fi option{background:var(--sur2)}
     </div>
 
     <div class="s-sec">
-      <div class="s-label">Connection</div>
-      <div class="fg">
-        <label class="fl">AWS Access Key ID</label>
-        <input class="fi" id="in-key" type="text" placeholder="AKIAIOSFODNN7EXAMPLE" autocomplete="off" spellcheck="false">
+      <div class="s-label-row">
+        <div class="s-label">Connections</div>
+        <button class="btn btn-sm btn-p" onclick="showAddConn()" style="padding:4px 10px;font-size:11px">+ Add</button>
       </div>
-      <div class="fg">
-        <label class="fl">Secret Access Key</label>
-        <input class="fi" id="in-sec" type="password" placeholder="••••••••••••••••" autocomplete="off">
-      </div>
-      <div class="fg">
-        <label class="fl">Region</label>
-        <input class="fi" id="in-reg" type="text" placeholder="us-east-1" value="us-east-1">
-      </div>
-      <div class="fg">
-        <label class="fl">Bucket Name</label>
-        <input class="fi" id="in-bkt" type="text" placeholder="my-bucket" autocomplete="off">
-      </div>
-      <div class="fg">
-        <label class="fl">Custom Endpoint <span style="color:var(--txt3)">(optional)</span></label>
-        <input class="fi" id="in-ep" type="text" placeholder="https://s3.example.com" autocomplete="off">
-        <div class="fi-hint">MinIO · Cloudflare R2 · Wasabi · DigitalOcean Spaces</div>
-      </div>
-      <div class="err-box hidden" id="conn-err"></div>
-      <div class="btn-row">
-        <button class="btn btn-p" id="btn-conn" onclick="connect()">Connect</button>
-        <button class="btn btn-g hidden" id="btn-disc" onclick="disconnect()">Disconnect</button>
+      <div class="bkt-list-wrap" id="bucket-list">
+        <div class="bkt-empty">No connections yet.<br>Click <strong style="color:var(--txt2)">+ Add</strong> to get started.</div>
       </div>
     </div>
 
@@ -455,6 +452,48 @@ select.fi option{background:var(--sur2)}
   </div>
 </div>
 
+<!-- Add / Edit Connection -->
+<div class="backdrop" id="md-addconn">
+  <div class="modal">
+    <div class="m-head">
+      <div class="m-title" id="md-addconn-title">Add Connection</div>
+      <button class="m-close" onclick="closeModal('md-addconn')">✕</button>
+    </div>
+    <div class="m-body">
+      <div class="fg">
+        <label class="fl">Label <span style="color:var(--txt3)">(optional)</span></label>
+        <input class="fi" id="nc-label" type="text" placeholder="Production · Staging · Personal…" autocomplete="off">
+      </div>
+      <div class="fg">
+        <label class="fl">AWS Access Key ID</label>
+        <input class="fi" id="nc-key" type="text" placeholder="AKIAIOSFODNN7EXAMPLE" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fg">
+        <label class="fl">Secret Access Key</label>
+        <input class="fi" id="nc-sec" type="password" placeholder="••••••••••••••••" autocomplete="off">
+      </div>
+      <div class="fg">
+        <label class="fl">Region</label>
+        <input class="fi" id="nc-reg" type="text" placeholder="us-east-1" value="us-east-1">
+      </div>
+      <div class="fg">
+        <label class="fl">Bucket Name</label>
+        <input class="fi" id="nc-bkt" type="text" placeholder="my-bucket" autocomplete="off" onkeydown="if(event.key==='Enter')saveNewConn()">
+      </div>
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Custom Endpoint <span style="color:var(--txt3)">(optional)</span></label>
+        <input class="fi" id="nc-ep" type="text" placeholder="https://s3.example.com" autocomplete="off">
+        <div class="fi-hint">MinIO · Cloudflare R2 · Wasabi · DigitalOcean Spaces</div>
+      </div>
+      <div class="err-box hidden" id="nc-err" style="margin-top:10px"></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" onclick="closeModal('md-addconn')">Cancel</button>
+      <button class="btn btn-p" onclick="saveNewConn()">Connect</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
@@ -477,6 +516,10 @@ let filterQ = '';
 let pendingDelKeys = [];
 let shareKey = '';
 
+// Multi-bucket
+let connections = [];    // [{id, label, key, sec, reg, bkt, ep}, …]
+let activeConnId = null; // id of the currently active connection
+
 // ─────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────
@@ -487,15 +530,21 @@ document.addEventListener('DOMContentLoaded', () => {
     el('https-warn').classList.remove('hidden');
   }
 
-  // Restore session
+  // Restore session (supports both old single-bucket and new multi-bucket format)
   const c = loadCreds();
-  if (c) {
-    set('in-key', c.key || '');
-    set('in-sec', c.sec || '');
-    set('in-reg', c.reg || 'us-east-1');
-    set('in-bkt', c.bkt || '');
-    set('in-ep',  c.ep  || '');
-    if (c.key && c.sec && c.bkt) connect(true);
+  if (c.connections && Array.isArray(c.connections)) {
+    // New multi-bucket format
+    connections = c.connections;
+    renderBucketList();
+    if (c.activeConnId) connectById(c.activeConnId, true);
+  } else if (c.key) {
+    // Migrate old single-connection format
+    const conn = { id: mkuid(), label: c.bkt || 'Bucket', key: c.key, sec: c.sec, reg: c.reg || 'us-east-1', bkt: c.bkt || '', ep: c.ep || '' };
+    connections = [conn];
+    renderBucketList();
+    if (c.key && c.sec && c.bkt) connectById(conn.id, true);
+  } else {
+    renderBucketList();
   }
 
   setupDrop();
@@ -513,69 +562,156 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─────────────────────────────────────────────
-//  CREDENTIALS
+//  CREDENTIALS  (multi-bucket)
 // ─────────────────────────────────────────────
 function loadCreds() {
-  try { return JSON.parse(sessionStorage.getItem('s3b')) || null; } catch { return null; }
+  try { return JSON.parse(sessionStorage.getItem('s3b')) || {}; } catch { return {}; }
 }
-function saveCreds(o) {
-  try { sessionStorage.setItem('s3b', JSON.stringify(o)); } catch {}
+function saveCreds() {
+  try { sessionStorage.setItem('s3b', JSON.stringify({ connections, activeConnId })); } catch {}
 }
 function clearSession() {
   sessionStorage.removeItem('s3b');
-  ['in-key','in-sec','in-bkt','in-ep'].forEach(id => el(id).value = '');
+  connections = []; activeConnId = null;
   disconnect();
+  renderBucketList();
   toast('Session cleared', 'inf');
 }
 
 // ─────────────────────────────────────────────
-//  CONNECT / DISCONNECT
+//  BUCKET LIST UI
 // ─────────────────────────────────────────────
-async function connect(silent = false) {
-  const key = g('in-key'), sec = g('in-sec');
-  const reg = g('in-reg') || 'us-east-1';
-  const bkt = g('in-bkt'), ep = g('in-ep');
+function mkuid() {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+}
 
-  el('conn-err').classList.add('hidden');
-  if (!key) return errConn('Access Key ID is required');
-  if (!sec) return errConn('Secret Access Key is required');
-  if (!bkt) return errConn('Bucket name is required');
+function renderBucketList() {
+  const list = el('bucket-list');
+  if (!connections.length) {
+    list.innerHTML = '<div class="bkt-empty">No connections yet.<br>Click <strong style="color:var(--txt2)">+ Add</strong> to get started.</div>';
+    return;
+  }
+  list.innerHTML = connections.map(c => {
+    let sub = x(c.bkt);
+    if (c.ep) { try { sub += ' · ' + new URL(c.ep).hostname; } catch {} }
+    const active = c.id === activeConnId;
+    return `<div class="bkt-item${active ? ' active' : ''}" onclick="switchBucket('${x(c.id)}')">
+      <div class="bkt-dot${active ? ' on' : ''}"></div>
+      <div class="bkt-lbl">
+        <div class="bkt-name">${x(c.label || c.bkt)}</div>
+        <div class="bkt-sub">${sub}</div>
+      </div>
+      <button class="bkt-rm" onclick="removeConn('${x(c.id)}',event)" title="Remove connection">✕</button>
+    </div>`;
+  }).join('');
+}
 
-  const cfg = { accessKeyId: key, secretAccessKey: sec, region: reg, signatureVersion: 'v4' };
-  if (ep) { cfg.endpoint = ep; cfg.s3ForcePathStyle = true; }
+// ─────────────────────────────────────────────
+//  CONNECT / DISCONNECT  (multi-bucket)
+// ─────────────────────────────────────────────
+async function switchBucket(id) {
+  if (id === activeConnId && S3) return; // already active
+  prefix = '';
+  await connectById(id);
+}
+
+async function connectById(id, silent = false) {
+  const conn = connections.find(c => c.id === id);
+  if (!conn) return;
+
+  const cfg = { accessKeyId: conn.key, secretAccessKey: conn.sec, region: conn.reg || 'us-east-1', signatureVersion: 'v4' };
+  if (conn.ep) { cfg.endpoint = conn.ep; cfg.s3ForcePathStyle = true; }
 
   AWS.config.update(cfg);
   S3 = new AWS.S3();
-  bucket = bkt;
-  prefix = '';
+  bucket  = conn.bkt;
+  prefix  = '';
+  activeConnId = id;
 
-  saveCreds({ key, sec, reg, bkt, ep });
+  saveCreds();
+  renderBucketList();
   setUI(true);
   await load();
-  if (!silent) toast(`Connected to "${bkt}"`, 'ok');
+  if (!silent) toast(`Connected to "${conn.bkt}"`, 'ok');
+}
+
+function showAddConn() {
+  el('nc-err').classList.add('hidden');
+  el('nc-label').value = '';
+  el('nc-key').value   = '';
+  el('nc-sec').value   = '';
+  el('nc-reg').value   = 'us-east-1';
+  el('nc-bkt').value   = '';
+  el('nc-ep').value    = '';
+  openModal('md-addconn');
+  setTimeout(() => el('nc-key').focus(), 60);
+}
+
+async function saveNewConn() {
+  const label = g('nc-label');
+  const key   = g('nc-key'), sec = g('nc-sec');
+  const reg   = g('nc-reg') || 'us-east-1';
+  const bkt   = g('nc-bkt');
+  const ep    = g('nc-ep');
+
+  const errEl = el('nc-err');
+  errEl.classList.add('hidden');
+  if (!key) { errEl.textContent = 'Access Key ID is required';    errEl.classList.remove('hidden'); return; }
+  if (!sec) { errEl.textContent = 'Secret Access Key is required'; errEl.classList.remove('hidden'); return; }
+  if (!bkt) { errEl.textContent = 'Bucket name is required';       errEl.classList.remove('hidden'); return; }
+
+  const conn = { id: mkuid(), label: label || bkt, key, sec, reg, bkt, ep };
+  connections.push(conn);
+  saveCreds();
+  renderBucketList();
+  closeModal('md-addconn');
+  await connectById(conn.id);
+}
+
+function removeConn(id, e) {
+  if (e) e.stopPropagation();
+  connections = connections.filter(c => c.id !== id);
+
+  if (activeConnId === id) {
+    // Clear active state first
+    S3 = null; bucket = ''; prefix = '';
+    activeConnId = null;
+    rawFolders = []; rawFiles = []; items = []; selKeys.clear();
+    setUI(false);
+    showState('s-connect');
+    buildPathbar();
+    // Auto-switch to first remaining connection
+    if (connections.length) {
+      saveCreds();
+      renderBucketList();
+      connectById(connections[0].id, true);
+      return;
+    }
+  }
+  saveCreds();
+  renderBucketList();
+  toast('Connection removed', 'inf');
 }
 
 function disconnect() {
   S3 = null; bucket = ''; prefix = '';
+  activeConnId = null;
   rawFolders = []; rawFiles = []; items = []; selKeys.clear();
   setUI(false);
   showState('s-connect');
   buildPathbar();
+  renderBucketList();
 }
 
 function setUI(on) {
   const b = el('badge');
-  b.className = 'badge ' + (on ? 'on' : 'off');
-  b.textContent = on ? `${bucket}` : 'Disconnected';
-  el('btn-conn').classList.toggle('hidden', on);
-  el('btn-disc').classList.toggle('hidden', !on);
-  el('btn-up').disabled = !on;
+  b.className   = 'badge ' + (on ? 'on' : 'off');
+  b.textContent = on ? bucket : 'Disconnected';
+  el('btn-up').disabled    = !on;
   el('btn-mkdir').disabled = !on;
   el('stats-sec').classList.toggle('hidden', !on);
   if (!on) { setStats(0, 0, 0); updateSelUI(); }
 }
-
-function errConn(msg) { el('conn-err').textContent = msg; el('conn-err').classList.remove('hidden'); }
 
 // ─────────────────────────────────────────────
 //  LOAD
