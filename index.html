@@ -3,614 +3,835 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>S3 Browser</title>
+<title>S3Exp</title>
 <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1485.0.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-
-:root{
-  --bg:#0c0c10;
-  --sur:#13131a;
-  --sur2:#1c1c26;
-  --sur3:#252530;
-  --bdr:#2a2a38;
-  --bdr2:#3a3a4e;
-  --txt:#eeeef5;
-  --txt2:#8888a8;
-  --txt3:#44445a;
-  --acc:#7c5af0;
-  --accL:#a07ef8;
-  --accD:rgba(124,90,240,.14);
-  --fol:#f5a623;
-  --ok:#34d399;
-  --err:#f87171;
-  --warn:#fbbf24;
-  --ui:'Inter',system-ui,sans-serif;
-  --mo:'JetBrains Mono','Fira Code',monospace;
-  --r:6px;--r2:10px;
-}
-
-html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
-
-/* ── Layout ── */
-.app{display:grid;grid-template:"top top"52px"side main"1fr/280px 1fr;height:100vh}
-
-/* ── Topbar ── */
-.topbar{grid-area:top;display:flex;align-items:center;gap:10px;padding:0 20px;background:var(--sur);border-bottom:1px solid var(--bdr);z-index:10}
-.logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px;letter-spacing:-.02em}
-.logo-box{width:28px;height:28px;background:var(--acc);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-.tb-gap{flex:1}
-.badge{display:flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid;transition:all .2s}
-.badge.on{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.25);color:var(--ok)}
-.badge.off{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.25);color:var(--err)}
-.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
-.icon-btn{width:32px;height:32px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--sur2);color:var(--txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .15s}
-.icon-btn:hover{background:var(--sur3);color:var(--txt);border-color:var(--bdr2)}
-
-/* ── Sidebar ── */
-.sidebar{grid-area:side;background:var(--sur);border-right:1px solid var(--bdr);overflow-y:auto;display:flex;flex-direction:column}
-.s-sec{padding:16px;border-bottom:1px solid var(--bdr)}
-.s-sec:last-child{border-bottom:none}
-.s-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--txt3);margin-bottom:12px}
-.fg{margin-bottom:10px}
-.fg:last-child{margin-bottom:0}
-.fl{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px;font-weight:500}
-.fi{width:100%;padding:7px 10px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);color:var(--txt);font-family:var(--mo);font-size:12px;outline:none;transition:border-color .15s}
-.fi:focus{border-color:var(--acc)}
-.fi::placeholder{color:var(--txt3)}
-.fi-hint{font-size:11px;color:var(--txt3);margin-top:4px}
-select.fi option{background:var(--sur2)}
-
-/* ── Buttons ── */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;outline:none;transition:all .15s;white-space:nowrap;line-height:1}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn-p{background:var(--acc);color:#fff}
-.btn-p:hover:not(:disabled){background:var(--accL)}
-.btn-s{background:var(--sur2);color:var(--txt);border-color:var(--bdr)}
-.btn-s:hover:not(:disabled){background:var(--sur3);border-color:var(--bdr2)}
-.btn-d{background:rgba(248,113,113,.1);color:var(--err);border-color:rgba(248,113,113,.2)}
-.btn-d:hover:not(:disabled){background:rgba(248,113,113,.2)}
-.btn-g{background:transparent;color:var(--txt2)}
-.btn-g:hover:not(:disabled){background:var(--sur2);color:var(--txt)}
-.btn-sm{padding:5px 10px;font-size:12px}
-.btn-row{display:flex;gap:8px;margin-top:12px}
-
-/* ── Stats ── */
-.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.stat-card{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px}
-.stat-v{font-family:var(--mo);font-size:17px;font-weight:500;color:var(--txt)}
-.stat-l{font-size:10px;color:var(--txt3);margin-top:2px}
-
-/* ── Main ── */
-.main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
-
-/* ── Pathbar ── */
-.pathbar{display:flex;align-items:center;padding:0 16px;height:44px;background:var(--sur);border-bottom:1px solid var(--bdr);font-family:var(--mo);font-size:13px;overflow-x:auto;white-space:nowrap;flex-shrink:0;gap:0}
-.pb-prompt{color:var(--accL);margin-right:8px;flex-shrink:0}
-.crumb{color:var(--txt2);cursor:pointer;padding:2px 5px;border-radius:4px;transition:all .1s}
-.crumb:hover{color:var(--txt);background:var(--sur3)}
-.crumb.last{color:var(--txt);cursor:default;pointer-events:none}
-.crumb.last:hover{background:none}
-.crumb-sep{color:var(--txt3);margin:0 1px;flex-shrink:0}
-.cursor{display:inline-block;width:2px;height:14px;background:var(--acc);border-radius:1px;margin-left:4px;vertical-align:middle;animation:blink 1.2s step-end infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
-
-/* ── Toolbar ── */
-.toolbar{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--sur);border-bottom:1px solid var(--bdr);flex-shrink:0}
-.tb-gap2{flex:1}
-.search-wrap{position:relative;display:flex;align-items:center}
-.search-ico{position:absolute;left:9px;color:var(--txt3);font-size:13px;pointer-events:none}
-.search-in{padding:6px 10px 6px 28px;background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);color:var(--txt);font-size:13px;outline:none;width:200px;transition:border-color .15s}
-.search-in:focus{border-color:var(--acc)}
-.search-in::placeholder{color:var(--txt3)}
-
-/* ── File Area ── */
-.file-area{flex:1;overflow:auto;position:relative}
-.file-list-header{display:grid;grid-template-columns:44px 1fr 90px 148px 108px;position:sticky;top:0;z-index:5;background:var(--sur2);border-bottom:1px solid var(--bdr)}
-.fh-cell{padding:8px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px;transition:color .1s}
-.fh-cell:hover{color:var(--txt2)}
-.fh-cell.sorted{color:var(--accL)}
-.fh-cell:nth-child(n+3){justify-content:flex-end}
-.fh-cell:first-child{cursor:default}
-
-.file-row{display:grid;grid-template-columns:44px 1fr 90px 148px 108px;align-items:center;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s}
-.file-row:last-child{border-bottom:none}
-.file-row:hover{background:var(--sur2)}
-.file-row.sel{background:var(--accD)}
-
-.fr-check{display:flex;align-items:center;justify-content:center;padding:12px 0 12px 12px}
-.checkbox{width:15px;height:15px;border:1.5px solid var(--bdr2);border-radius:3px;display:flex;align-items:center;justify-content:center;background:var(--sur);transition:all .1s;flex-shrink:0;cursor:pointer}
-.checkbox:hover{border-color:var(--acc)}
-.checkbox.on{background:var(--acc);border-color:var(--acc)}
-.checkbox.on::after{content:'✓';color:#fff;font-size:9px;line-height:1}
-
-.fr-name{display:flex;align-items:center;gap:8px;padding:12px 8px;overflow:hidden}
-.f-icon{font-size:15px;flex-shrink:0}
-.f-name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.f-name.folder-name{color:var(--fol)}
-
-.fr-size{padding:12px 10px 12px 0;text-align:right;font-family:var(--mo);font-size:12px;color:var(--txt2)}
-.fr-date{padding:12px 10px 12px 0;text-align:right;font-size:12px;color:var(--txt2)}
-.fr-actions{padding:12px 12px 12px 0;display:flex;justify-content:flex-end;gap:4px;opacity:0;transition:opacity .1s}
-.file-row:hover .fr-actions{opacity:1}
-
-.act-btn{padding:3px 7px;border-radius:4px;border:1px solid var(--bdr);background:var(--sur3);color:var(--txt2);cursor:pointer;font-size:11px;transition:all .1s;line-height:1}
-.act-btn:hover{color:var(--txt);border-color:var(--bdr2)}
-.act-btn.del:hover{color:var(--err);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}
-
-/* ── Empty States ── */
-.state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;height:100%;text-align:center;padding:40px}
-.state-ico{font-size:48px;opacity:.2}
-.state-title{font-size:16px;font-weight:500;color:var(--txt2)}
-.state-desc{font-size:13px;color:var(--txt3);max-width:340px;line-height:1.8}
-
-/* ── Statusbar ── */
-.statusbar{display:flex;align-items:center;gap:12px;padding:6px 16px;background:var(--sur);border-top:1px solid var(--bdr);font-size:12px;color:var(--txt3);flex-shrink:0}
-.sb-gap{flex:1}
-.sb-sel{color:var(--accL);font-size:12px}
-
-/* ── Drop Overlay ── */
-.drop-overlay{position:fixed;inset:0;background:rgba(124,90,240,.12);border:3px dashed var(--acc);z-index:500;display:none;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:var(--accL);pointer-events:none;backdrop-filter:blur(2px)}
-.drop-overlay.on{display:flex}
-
-/* ── Modals ── */
-.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
-.backdrop.open{display:flex}
-.modal{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r2);padding:24px;width:100%;max-width:440px;box-shadow:0 25px 70px rgba(0,0,0,.5)}
-.m-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.m-title{font-weight:600;font-size:16px}
-.m-close{background:none;border:none;color:var(--txt3);cursor:pointer;font-size:18px;padding:2px;border-radius:4px;line-height:1;transition:color .1s}
-.m-close:hover{color:var(--txt)}
-.m-body{margin-bottom:20px}
-.m-foot{display:flex;justify-content:flex-end;gap:8px}
-
-/* ── Upload ── */
-.upload-list{display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto}
-.u-item{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px}
-.u-head{display:flex;justify-content:space-between;margin-bottom:6px}
-.u-name{font-family:var(--mo);font-size:12px;color:var(--txt);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.u-pct{font-family:var(--mo);font-size:12px;color:var(--txt2);margin-left:8px;flex-shrink:0}
-.prog{height:3px;background:var(--sur3);border-radius:2px;overflow:hidden}
-.prog-fill{height:100%;background:var(--acc);border-radius:2px;transition:width .3s}
-.prog-fill.done{background:var(--ok)}
-.prog-fill.fail{background:var(--err)}
-
-/* ── Share ── */
-.s3-uri{display:block;padding:8px 10px;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);font-family:var(--mo);font-size:11px;color:var(--acc);word-break:break-all;margin-bottom:14px}
-.url-txt{width:100%;padding:10px;background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);font-family:var(--mo);font-size:11px;color:var(--txt2);word-break:break-all;resize:none;outline:none;min-height:80px}
-
-/* ── Error / Warn ── */
-.err-box{padding:8px 10px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);border-radius:var(--r);color:var(--err);font-size:12px;margin-top:8px}
-.warn-box{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:var(--r);color:var(--warn);font-size:12px;margin-bottom:12px}
-.sec-note{font-size:12px;color:var(--txt2);line-height:1.7}
-.cors-snippet{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 12px;font-family:var(--mo);font-size:11px;color:var(--txt2);white-space:pre;overflow-x:auto;margin-top:10px}
-
-/* ── Toasts ── */
-.toast-wrap{position:fixed;bottom:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-.toast{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--sur3);border:1px solid var(--bdr);border-radius:var(--r);font-size:13px;color:var(--txt);box-shadow:0 4px 24px rgba(0,0,0,.4);min-width:240px;animation:tin .2s ease;pointer-events:auto}
-@keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
-.toast.ok{border-left:3px solid var(--ok)}
-.toast.err{border-left:3px solid var(--err)}
-.toast.inf{border-left:3px solid var(--acc)}
-
-/* ── Spinner ── */
-.spin{border:2px solid var(--bdr);border-top-color:var(--acc);border-radius:50%;animation:rot .6s linear infinite;display:inline-block}
-@keyframes rot{to{transform:rotate(360deg)}}
-
-/* ── Misc ── */
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--sur3);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--bdr2)}
-.hidden{display:none!important}
-
-/* ── Bucket List ── */
-.bkt-list-wrap{display:flex;flex-direction:column;gap:6px}
-.bkt-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r);border:1px solid var(--bdr);background:var(--sur2);cursor:pointer;transition:all .15s;position:relative}
-.bkt-item:hover{border-color:var(--bdr2);background:var(--sur3)}
-.bkt-item.active{border-color:rgba(124,90,240,.5);background:var(--accD)}
-.bkt-dot{width:7px;height:7px;border-radius:50%;background:var(--bdr2);flex-shrink:0;transition:background .2s}
-.bkt-dot.on{background:var(--ok)}
-.bkt-lbl{flex:1;overflow:hidden;min-width:0}
-.bkt-name{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
-.bkt-sub{font-size:11px;color:var(--txt3);font-family:var(--mo);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
-.bkt-rm{background:none;border:none;color:transparent;cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;line-height:1;flex-shrink:0;transition:color .1s}
-.bkt-item:hover .bkt-rm{color:var(--txt3)}
-.bkt-rm:hover{color:var(--err)!important}
-.bkt-empty{font-size:12px;color:var(--txt3);line-height:1.8;padding:2px 0}
-.s-label-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.s-label-row .s-label{margin-bottom:0}
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
+<!-- ═══ Icon sprite. One consistent stroke set, tinted by currentColor. ═══ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M12 3l9 4.6-9 4.6-9-4.6L12 3Z"/><path d="m4 11.4 8 4.1 8-4.1"/><path d="m4 15.4 8 4.1 8-4.1"/></symbol>
+  <symbol id="i-dir" viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5v-10Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3.5h7l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z"/><path d="M13 3.5v5h5"/></symbol>
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4.5 17 4.2-4 3.3 3 2.6-2.6 5 4.6"/></symbol>
+  <symbol id="i-vid" viewBox="0 0 24 24"><rect x="3.5" y="6" width="12" height="12" rx="1.5"/><path d="m16 11 4.5-2.6v7.2L16 13v-2Z"/></symbol>
+  <symbol id="i-aud" viewBox="0 0 24 24"><path d="M5 14v-3a7 7 0 0 1 14 0v3"/><path d="M5 14h2.5v5H6a1 1 0 0 1-1-1v-4Zm14 0h-2.5v5H18a1 1 0 0 0 1-1v-4Z"/></symbol>
+  <symbol id="i-zip" viewBox="0 0 24 24"><rect x="4.5" y="4" width="15" height="16" rx="1.5"/><path d="M12 4v4m0 2v1.5m0 2V15"/><rect x="10.2" y="15.5" width="3.6" height="3.5" rx="1"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m9 8-4 4 4 4m6-8 4 4-4 4"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3.5h7l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z"/><path d="M13 3.5v5h5"/><path d="M8.5 13h7M8.5 16.5h4.5"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><rect x="4" y="4.5" width="16" height="15" rx="1.5"/><path d="M4 9.5h16M4 14.5h16M9.5 4.5v15M14.5 4.5v15"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8m-3 0h4v4"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6.5" rx="7" ry="2.8"/><path d="M5 6.5v11c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-11"/><path d="M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m15.5 15.5 4 4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11m0-11-11 11"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+  <symbol id="i-dir-plus" viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5v-10Z"/><path d="M11 14h4m-2-2v4"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5.5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v13.5M6 13l6 6 6-6"/></symbol>
+  <symbol id="i-level-up" viewBox="0 0 24 24"><path d="M5 13.5 12 7l7 6.5"/><path d="M12 7v12"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.6-5.7"/><path d="M19.5 5v4h-4"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1"/><path d="M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14"/><path d="M9 7V5.2A1.2 1.2 0 0 1 10.2 4h3.6A1.2 1.2 0 0 1 15 5.2V7"/><path d="M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="1.5"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8a1.5 1.5 0 0 0 1.5 1.5h2.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M4 5l16 14"/><path d="M9.5 7A9.9 9.9 0 0 1 12 6.7c6 0 9.5 5.3 9.5 5.3a17 17 0 0 1-2.6 3.2M6.6 8.6A16.6 16.6 0 0 0 2.5 12s3.5 5.3 9.5 5.3a9.7 9.7 0 0 0 3.2-.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6"/><path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.5 21 19.5H3L12 4.5Z"/><path d="M12 10v4m0 2.5v.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5m0-8v.5"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4A2.5 2.5 0 0 1 14.5 10c0 1.7-2.4 2-2.5 3.6m0 2.4v.5"/></symbol>
+  <symbol id="i-cmd" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.8"/><path d="m7 10.5 2 2-2 2M12.5 14.5h4.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M16.5 4.6a2 2 0 0 1 2.9 2.9L8.4 18.5l-4 1.1 1.1-4L16.5 4.6Z"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M5.5 4.5h9l4 4v11a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1Z"/><path d="M8.5 4.5v5h6v-5M8.5 20v-5.5h7V20"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3.5v10m0 0-3.5-3.5M12 13.5 15.5 10"/><path d="M4.5 15.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-broom" viewBox="0 0 24 24"><path d="M14 4.5 19.5 10"/><path d="m8.5 15 5-5 2.5 2.5-5 5-4.5 2 2-4.5Z"/><path d="M5 20h6"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="M12 6v12"/><path d="m8 10 4-4 4 4"/></symbol>
+</svg>
+
 <div class="app">
 
-  <!-- ─ TOP BAR ─ -->
-  <header class="topbar">
-    <div class="logo">
-      <div class="logo-box">🪣</div>
-      S3 Browser
+  <!-- ═══ Header: brand + the s3:// address bar ═══ -->
+  <header class="head">
+    <button class="ibtn side-x" onclick="toggleSide()" aria-label="Show connections"><svg class="ic"><use href="#i-menu"/></svg></button>
+    <div class="brand">
+      <div class="brand-m"><svg class="ic"><use href="#i-store"/></svg></div>
+      <div class="brand-t">S3<span>Exp</span></div>
     </div>
-    <div class="tb-gap"></div>
-    <div class="badge off" id="badge">Disconnected</div>
-    <button class="icon-btn" title="Help &amp; CORS setup" onclick="showHelp()">?</button>
+
+    <!-- The signature element: breadcrumbs when idle, a raw editable key
+         prefix when focused, because a prefix is what S3 actually stores. -->
+    <div class="addr off" id="addr" onclick="editAddr()" onkeydown="addrOpenKey(event)"
+         tabindex="0" role="group" aria-label="Bucket and prefix, press Enter to edit">
+      <span class="addr-scheme">s3://</span>
+      <div class="addr-path" id="addr-path"></div>
+      <div class="addr-tail">
+        <span class="addr-hint" id="addr-hint">⌘L</span>
+      </div>
+      <input class="addr-in mo" id="addr-in" spellcheck="false" autocomplete="off"
+             aria-label="Edit bucket and prefix"
+             onkeydown="addrKey(event)" onblur="cancelAddr()">
+    </div>
+
+    <button class="ibtn" onclick="openPalette()" aria-label="Command palette" title="Command palette  ⌘K">
+      <svg class="ic"><use href="#i-cmd"/></svg>
+    </button>
+    <button class="ibtn" onclick="showModal('m-help')" aria-label="Help" title="Help and setup">
+      <svg class="ic"><use href="#i-help"/></svg>
+    </button>
   </header>
 
-  <!-- ─ SIDEBAR ─ -->
-  <aside class="sidebar">
+  <div class="work">
 
-    <div class="s-sec hidden" id="https-warn">
-      <div class="warn-box">⚠ Open via HTTPS or localhost for secure credential handling.</div>
-    </div>
+    <!-- ═══ Sidebar ═══ -->
+    <aside class="side" id="side">
 
-    <div class="s-sec">
-      <div class="s-label-row">
-        <div class="s-label">Connections</div>
-        <button class="btn btn-sm btn-p" onclick="showAddConn()" style="padding:4px 10px;font-size:11px">+ Add</button>
-      </div>
-      <div class="bkt-list-wrap" id="bucket-list">
-        <div class="bkt-empty">No connections yet.<br>Click <strong style="color:var(--txt2)">+ Add</strong> to get started.</div>
-      </div>
-    </div>
-
-    <div class="s-sec hidden" id="stats-sec">
-      <div class="s-label">Bucket Stats</div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-v" id="st-files">—</div><div class="stat-l">Files</div></div>
-        <div class="stat-card"><div class="stat-v" id="st-folders">—</div><div class="stat-l">Folders</div></div>
-        <div class="stat-card" style="grid-column:1/-1"><div class="stat-v" id="st-size">—</div><div class="stat-l">Total in view</div></div>
-      </div>
-    </div>
-
-    <div class="s-sec" style="margin-top:auto">
-      <div class="s-label">Security</div>
-      <p class="sec-note">🔒 Credentials are stored in <strong>session memory only</strong> — automatically cleared when you close this tab. Never written to disk or localStorage.</p>
-      <div class="btn-row">
-        <button class="btn btn-sm btn-d" onclick="clearSession()">Clear Session</button>
-      </div>
-    </div>
-
-  </aside>
-
-  <!-- ─ MAIN ─ -->
-  <main class="main">
-
-    <div class="pathbar" id="pathbar">
-      <span class="pb-prompt">~</span>
-      <span class="crumb last">Connect to a bucket to get started</span>
-    </div>
-
-    <div class="toolbar">
-      <button class="btn btn-p btn-sm" id="btn-up" onclick="triggerUpload()" disabled>↑ Upload</button>
-      <button class="btn btn-s btn-sm" id="btn-mkdir" onclick="showMkdir()" disabled>+ Folder</button>
-      <button class="btn btn-d btn-sm hidden" id="btn-del-sel" onclick="deleteSelected()">🗑 Delete</button>
-      <div class="tb-gap2"></div>
-      <div class="search-wrap">
-        <span class="search-ico">⌕</span>
-        <input class="search-in" id="search" type="text" placeholder="Filter files…" oninput="applyFilter()">
-      </div>
-      <button class="icon-btn" id="btn-ref" title="Refresh (F5)" onclick="refresh()">⟳</button>
-    </div>
-
-    <div class="file-area" id="file-area">
-
-      <div class="state" id="s-connect">
-        <div class="state-ico">🪣</div>
-        <div class="state-title">No bucket connected</div>
-        <div class="state-desc">Enter your AWS credentials in the sidebar and click Connect. Need CORS help? Click the ? button.</div>
+      <div class="sect hidden" id="tls-warn">
+        <div class="warn">
+          <svg class="ic ic-sm"><use href="#i-alert"/></svg>
+          <div>Serve this page over HTTPS or from localhost. Browsers withhold <code style="font-family:var(--mo)">crypto.subtle</code> on insecure origins, so encrypted files are unavailable.</div>
+        </div>
       </div>
 
-      <div class="state hidden" id="s-load">
-        <div class="spin" style="width:36px;height:36px;border-width:3px"></div>
-        <div class="state-title">Loading…</div>
+      <div class="sect">
+        <div class="sect-h">
+          <div class="lbl">Connections</div>
+          <span class="chip" id="conn-count">0</span>
+        </div>
+        <div class="conns" id="conns"></div>
+        <div class="stack">
+          <button class="btn btn-s btn-sm btn-blk" onclick="showAddConn()">
+            <svg class="ic ic-sm"><use href="#i-plus"/></svg> Add connection
+          </button>
+        </div>
       </div>
 
-      <div class="state hidden" id="s-empty">
-        <div class="state-ico">📭</div>
-        <div class="state-title">Nothing here</div>
-        <div class="state-desc">This folder is empty. Drag files onto the window or click Upload to add files.</div>
+      <div class="sect">
+        <div class="sect-h">
+          <div class="lbl">Credentials</div>
+          <span class="chip" id="store-chip">Session only</span>
+        </div>
+        <p class="note" id="store-note"></p>
+        <div class="stack" id="store-actions"></div>
       </div>
 
-      <div class="hidden" id="s-list">
-        <div class="file-list-header">
-          <div class="fh-cell" style="cursor:pointer" onclick="selectAll()">
-            <div class="checkbox" id="check-all"></div>
+    </aside>
+
+    <!-- ═══ Main ═══ -->
+    <main class="main">
+
+      <div class="bar">
+        <button class="ibtn" id="b-up" onclick="goUp()" disabled aria-label="Up one prefix" title="Up one level  ⌫">
+          <svg class="ic"><use href="#i-level-up"/></svg>
+        </button>
+        <button class="ibtn" id="b-refresh" onclick="refresh()" disabled aria-label="Refresh" title="Refresh  R">
+          <svg class="ic"><use href="#i-refresh"/></svg>
+        </button>
+
+        <div class="divide"></div>
+
+        <div class="seek">
+          <svg class="ic ic-sm"><use href="#i-search"/></svg>
+          <input id="seek" type="text" placeholder="Filter this prefix…" aria-label="Filter objects"
+                 spellcheck="false" oninput="onSeek()">
+          <button class="seek-x hidden" id="seek-x" onclick="clearSeek()" aria-label="Clear filter">
+            <svg class="ic ic-sm"><use href="#i-x"/></svg>
+          </button>
+        </div>
+
+        <div class="bar-gap"></div>
+
+        <div class="vtog" role="group" aria-label="View">
+          <button class="ibtn on" id="v-list" onclick="setView('list')" aria-label="List view" title="List view">
+            <svg class="ic ic-sm"><use href="#i-list"/></svg>
+          </button>
+          <button class="ibtn" id="v-grid" onclick="setView('grid')" aria-label="Grid view" title="Grid view">
+            <svg class="ic ic-sm"><use href="#i-grid"/></svg>
+          </button>
+        </div>
+
+        <button class="btn btn-s btn-sm" id="b-mkdir" onclick="showMkdir()" disabled>
+          <svg class="ic ic-sm"><use href="#i-dir-plus"/></svg> New folder
+        </button>
+        <button class="btn btn-p btn-sm" id="b-upload" onclick="triggerUpload()" disabled>
+          <svg class="ic ic-sm"><use href="#i-up"/></svg> Upload
+        </button>
+      </div>
+
+      <div class="cols hidden" id="cols">
+        <div class="cell-c">
+          <button class="cbox" id="cbox-all" onclick="selectAll()" aria-label="Select all"></button>
+        </div>
+        <div><button id="s-name" onclick="setSort('name')">Name <svg class="ic ic-sm sort-i"><use href="#i-sort"/></svg></button></div>
+        <div class="r col-s"><button id="s-size" onclick="setSort('size')">Size <svg class="ic ic-sm sort-i"><use href="#i-sort"/></svg></button></div>
+        <div class="r col-d"><button id="s-date" onclick="setSort('date')">Modified <svg class="ic ic-sm sort-i"><use href="#i-sort"/></svg></button></div>
+        <div></div>
+      </div>
+
+      <div class="scroll" id="scroll">
+
+        <!-- No connection yet -->
+        <div class="state" id="st-none">
+          <div class="state-i"><svg class="ic ic-lg"><use href="#i-store"/></svg></div>
+          <div class="state-t">No bucket connected</div>
+          <div class="state-s">Add a connection with your access key, or load connections from an encrypted file you saved earlier.</div>
+          <div class="state-a">
+            <button class="btn btn-p" onclick="showAddConn()"><svg class="ic ic-sm"><use href="#i-plus"/></svg> Add connection</button>
+            <button class="btn btn-s" onclick="promptLoadFile()"><svg class="ic ic-sm"><use href="#i-import"/></svg> Load from file</button>
           </div>
-          <div class="fh-cell sorted" id="fh-name" onclick="setSort('name')">Name <span id="sort-name">↑</span></div>
-          <div class="fh-cell" id="fh-size" onclick="setSort('size')">Size <span id="sort-size"></span></div>
-          <div class="fh-cell" id="fh-date" onclick="setSort('date')">Modified <span id="sort-date"></span></div>
-          <div class="fh-cell" style="cursor:default"></div>
         </div>
-        <div id="file-list-body"></div>
-        <div id="truncated-note" class="hidden" style="text-align:center;padding:12px;font-size:12px;color:var(--txt3)">
-          ⚠ Showing first 1 000 items. Use a prefix to navigate deeper.
+
+        <!-- Loading -->
+        <div class="list hidden" id="st-load" aria-hidden="true"></div>
+
+        <!-- Empty prefix -->
+        <div class="state hidden" id="st-empty">
+          <div class="state-i"><svg class="ic ic-lg"><use href="#i-dir"/></svg></div>
+          <div class="state-t">Nothing under this prefix</div>
+          <div class="state-s" id="st-empty-s">Drop files anywhere on this window to upload them here.</div>
+          <div class="state-a">
+            <button class="btn btn-s" onclick="triggerUpload()"><svg class="ic ic-sm"><use href="#i-up"/></svg> Upload files</button>
+            <button class="btn btn-s" onclick="showMkdir()"><svg class="ic ic-sm"><use href="#i-dir-plus"/></svg> New folder</button>
+          </div>
+        </div>
+
+        <!-- Filter found nothing -->
+        <div class="state hidden" id="st-nomatch">
+          <div class="state-i"><svg class="ic ic-lg"><use href="#i-search"/></svg></div>
+          <div class="state-t">No match in this prefix</div>
+          <div class="state-s">The filter only looks at objects already loaded here. Clear it, or navigate to another prefix.</div>
+          <div class="state-a"><button class="btn btn-s" onclick="clearSeek()">Clear filter</button></div>
+        </div>
+
+        <!-- Request failed -->
+        <div class="state hidden" id="st-err">
+          <div class="state-i" style="color:var(--red)"><svg class="ic ic-lg"><use href="#i-alert"/></svg></div>
+          <div class="state-t">Could not list this bucket</div>
+          <div class="state-s" id="st-err-s"></div>
+          <div class="state-a">
+            <button class="btn btn-s" onclick="refresh()"><svg class="ic ic-sm"><use href="#i-refresh"/></svg> Try again</button>
+            <button class="btn btn-g" onclick="showModal('m-help')">Read the CORS setup</button>
+          </div>
+        </div>
+
+        <div class="hidden" id="st-list" role="listbox" aria-multiselectable="true" aria-label="Objects"></div>
+      </div>
+
+      <!-- Floating selection actions -->
+      <div class="selbar" id="selbar" role="toolbar" aria-label="Selection actions">
+        <div class="selbar-c" id="selbar-c"></div>
+        <div class="divide"></div>
+        <button class="btn btn-g btn-sm" onclick="downloadSelected()"><svg class="ic ic-sm"><use href="#i-down"/></svg> Download</button>
+        <button class="btn btn-d btn-sm" onclick="deleteSelected()"><svg class="ic ic-sm"><use href="#i-trash"/></svg> Delete</button>
+        <button class="ibtn" onclick="clearSel()" aria-label="Clear selection"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+      </div>
+
+      <div class="status">
+        <span id="st-info">Not connected</span>
+        <div class="bar-gap"></div>
+        <span class="warn-i hidden" id="st-trunc">
+          <svg class="ic ic-sm"><use href="#i-alert"/></svg> First 1,000 objects only
+        </span>
+        <span id="st-endpoint"></span>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<input type="file" id="up-in" multiple style="display:none" onchange="handleFileInput()">
+<input type="file" id="cred-file" accept=".s3vault,.json,application/json" style="display:none" onchange="onCredFilePicked()">
+
+<div class="drop" id="drop">
+  <div class="drop-in">
+    <svg class="ic ic-lg"><use href="#i-up"/></svg>
+    <div>Drop to upload into this prefix</div>
+    <div class="mo" style="font-size:11.5px;opacity:.75" id="drop-p"></div>
+  </div>
+</div>
+
+<!-- ═══ Command palette ═══ -->
+<div class="pal" id="pal" onclick="if(event.target===this)closePalette()">
+  <div class="pal-w" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="pal-s">
+      <svg class="ic"><use href="#i-search"/></svg>
+      <input id="pal-in" placeholder="Jump to a prefix, switch bucket, run a command…"
+             spellcheck="false" autocomplete="off" oninput="renderPalette()" onkeydown="paletteKey(event)">
+    </div>
+    <div class="pal-l" id="pal-l"></div>
+    <div class="pal-f">
+      <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+      <span><kbd>↵</kbd> run</span>
+      <span><kbd>esc</kbd> close</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modals ═══ -->
+
+<!-- Add connection -->
+<div class="back" id="m-addconn">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-addconn-t">
+    <div class="m-h">
+      <div class="m-t" id="m-addconn-t">Add connection</div>
+      <button class="m-x" onclick="hideModal('m-addconn')" aria-label="Close"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-b">
+      <div class="fld">
+        <label class="fl" for="nc-label">Name <i>optional</i></label>
+        <input class="in" id="nc-label" type="text" placeholder="Production" autocomplete="off">
+      </div>
+      <div class="fld">
+        <label class="fl" for="nc-key">Access key ID</label>
+        <input class="in" id="nc-key" type="text" placeholder="AKIAIOSFODNN7EXAMPLE" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label class="fl" for="nc-sec">Secret access key</label>
+        <div class="pw">
+          <input class="in" id="nc-sec" type="password" placeholder="••••••••••••••••••••" autocomplete="off">
+          <button class="pw-eye" onclick="togglePw('nc-sec',this)" aria-label="Show secret"><svg class="ic ic-sm"><use href="#i-eye"/></svg></button>
         </div>
       </div>
-
-    </div>
-
-    <div class="statusbar">
-      <span id="sb-info">—</span>
-      <div class="sb-gap"></div>
-      <span class="sb-sel hidden" id="sb-sel"></span>
-    </div>
-
-  </main>
-
-</div>
-
-<!-- Drop overlay -->
-<div class="drop-overlay" id="drop-overlay">↑ Drop files to upload</div>
-
-<!-- Hidden file input -->
-<input type="file" id="file-in" multiple style="display:none" onchange="handleFileInput()">
-
-<!-- ══════ MODALS ══════ -->
-
-<!-- Delete confirm -->
-<div class="backdrop" id="md-del">
-  <div class="modal">
-    <div class="m-head"><div class="m-title">Confirm Delete</div><button class="m-close" onclick="closeModal('md-del')">✕</button></div>
-    <div class="m-body" id="md-del-msg"></div>
-    <div class="m-foot">
-      <button class="btn btn-g" onclick="closeModal('md-del')">Cancel</button>
-      <button class="btn btn-d" onclick="confirmDelete()">Delete</button>
-    </div>
-  </div>
-</div>
-
-<!-- Create folder -->
-<div class="backdrop" id="md-mkdir">
-  <div class="modal">
-    <div class="m-head"><div class="m-title">Create Folder</div><button class="m-close" onclick="closeModal('md-mkdir')">✕</button></div>
-    <div class="m-body">
-      <div class="fg" style="margin-bottom:0">
-        <label class="fl">Folder Name</label>
-        <input class="fi" id="mkdir-name" type="text" placeholder="my-folder" onkeydown="if(event.key==='Enter')doMkdir()">
+      <div class="fld">
+        <label class="fl" for="nc-bkt">Bucket</label>
+        <input class="in" id="nc-bkt" type="text" placeholder="my-bucket" autocomplete="off" spellcheck="false"
+               onkeydown="if(event.key==='Enter')saveNewConn()">
       </div>
+      <div class="fld">
+        <label class="fl" for="nc-reg">Region</label>
+        <input class="in" id="nc-reg" type="text" placeholder="us-east-1" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label class="fl" for="nc-ep">Endpoint <i>optional</i></label>
+        <input class="in" id="nc-ep" type="text" placeholder="https://s3.example.com" autocomplete="off" spellcheck="false">
+        <div class="hint">Set this for MinIO, Cloudflare R2, Wasabi or DigitalOcean Spaces. Requests switch to path style automatically.</div>
+      </div>
+      <div class="err hidden" id="nc-err"><svg class="ic ic-sm"><use href="#i-alert"/></svg><span></span></div>
     </div>
-    <div class="m-foot">
-      <button class="btn btn-g" onclick="closeModal('md-mkdir')">Cancel</button>
-      <button class="btn btn-p" onclick="doMkdir()">Create</button>
-    </div>
-  </div>
-</div>
-
-<!-- Share / Presigned URL -->
-<div class="backdrop" id="md-share">
-  <div class="modal">
-    <div class="m-head"><div class="m-title">Share File</div><button class="m-close" onclick="closeModal('md-share')">✕</button></div>
-    <div class="m-body">
-      <div class="fg">
-        <label class="fl">Link Expiry</label>
-        <select class="fi" id="share-expiry" onchange="genPresign()">
-          <option value="900">15 minutes</option>
-          <option value="3600" selected>1 hour</option>
-          <option value="86400">24 hours</option>
-          <option value="604800">7 days</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label class="fl">S3 URI</label>
-        <span class="s3-uri" id="share-s3uri"></span>
-      </div>
-      <div class="fg" style="margin-bottom:0">
-        <label class="fl">Presigned URL</label>
-        <textarea class="url-txt" id="share-url" readonly></textarea>
-      </div>
-    </div>
-    <div class="m-foot">
-      <button class="btn btn-s" onclick="genPresign()">⟳ Regenerate</button>
-      <button class="btn btn-p" onclick="copyPresign()">Copy URL</button>
-    </div>
-  </div>
-</div>
-
-<!-- Upload progress -->
-<div class="backdrop" id="md-upload">
-  <div class="modal">
-    <div class="m-head"><div class="m-title">Uploading Files</div></div>
-    <div class="m-body"><div class="upload-list" id="upload-list"></div></div>
-    <div class="m-foot">
-      <button class="btn btn-g" id="btn-upload-close" disabled onclick="closeModal('md-upload');refresh()">Done</button>
-    </div>
-  </div>
-</div>
-
-<!-- Help -->
-<div class="backdrop" id="md-help">
-  <div class="modal" style="max-width:520px">
-    <div class="m-head"><div class="m-title">Help &amp; Setup</div><button class="m-close" onclick="closeModal('md-help')">✕</button></div>
-    <div class="m-body" style="font-size:13px;line-height:1.8;color:var(--txt2)">
-      <strong style="color:var(--txt)">CORS Configuration (required for browser access)</strong><br>
-      In AWS Console → S3 → Your Bucket → Permissions → CORS:
-      <pre class="cors-snippet">[{
-  "AllowedHeaders": ["*"],
-  "AllowedMethods": ["GET","PUT","POST","DELETE","HEAD"],
-  "AllowedOrigins": ["*"],
-  "ExposeHeaders": ["ETag"]
-}]</pre>
-      <br>
-      <strong style="color:var(--txt)">Minimum IAM Permissions</strong><br>
-      <code style="font-family:var(--mo);font-size:12px;color:var(--accL)">s3:ListBucket, s3:GetObject, s3:PutObject, s3:DeleteObject</code>
-      <br><br>
-      <strong style="color:var(--txt)">S3-Compatible Services</strong><br>
-      Enter the endpoint URL for MinIO, Cloudflare R2, Wasabi, DigitalOcean Spaces, etc. Path-style requests are used automatically.
-      <br><br>
-      <strong style="color:var(--txt)">Keyboard Shortcuts</strong><br>
-      <span style="font-family:var(--mo);font-size:12px">
-        Ctrl/⌘ A &nbsp;— Select all &nbsp;&nbsp; Delete — Delete selected<br>
-        F5 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;— Refresh &nbsp;&nbsp;&nbsp; Escape — Close dialogs
-      </span>
-      <br><br>
-      <strong style="color:var(--txt)">Security</strong><br>
-      Credentials are stored in <code style="font-family:var(--mo);font-size:12px;color:var(--accL)">sessionStorage</code> only — never written to localStorage or disk. They are cleared automatically when this tab is closed.
-    </div>
-    <div class="m-foot"><button class="btn btn-p" onclick="closeModal('md-help')">Got it</button></div>
-  </div>
-</div>
-
-<!-- Add / Edit Connection -->
-<div class="backdrop" id="md-addconn">
-  <div class="modal">
-    <div class="m-head">
-      <div class="m-title" id="md-addconn-title">Add Connection</div>
-      <button class="m-close" onclick="closeModal('md-addconn')">✕</button>
-    </div>
-    <div class="m-body">
-      <div class="fg">
-        <label class="fl">Label <span style="color:var(--txt3)">(optional)</span></label>
-        <input class="fi" id="nc-label" type="text" placeholder="Production · Staging · Personal…" autocomplete="off">
-      </div>
-      <div class="fg">
-        <label class="fl">AWS Access Key ID</label>
-        <input class="fi" id="nc-key" type="text" placeholder="AKIAIOSFODNN7EXAMPLE" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="fg">
-        <label class="fl">Secret Access Key</label>
-        <input class="fi" id="nc-sec" type="password" placeholder="••••••••••••••••" autocomplete="off">
-      </div>
-      <div class="fg">
-        <label class="fl">Region</label>
-        <input class="fi" id="nc-reg" type="text" placeholder="us-east-1" value="us-east-1">
-      </div>
-      <div class="fg">
-        <label class="fl">Bucket Name</label>
-        <input class="fi" id="nc-bkt" type="text" placeholder="my-bucket" autocomplete="off" onkeydown="if(event.key==='Enter')saveNewConn()">
-      </div>
-      <div class="fg" style="margin-bottom:0">
-        <label class="fl">Custom Endpoint <span style="color:var(--txt3)">(optional)</span></label>
-        <input class="fi" id="nc-ep" type="text" placeholder="https://s3.example.com" autocomplete="off">
-        <div class="fi-hint">MinIO · Cloudflare R2 · Wasabi · DigitalOcean Spaces</div>
-      </div>
-      <div class="err-box hidden" id="nc-err" style="margin-top:10px"></div>
-    </div>
-    <div class="m-foot">
-      <button class="btn btn-g" onclick="closeModal('md-addconn')">Cancel</button>
+    <div class="m-f">
+      <button class="btn btn-g" onclick="hideModal('m-addconn')">Cancel</button>
       <button class="btn btn-p" onclick="saveNewConn()">Connect</button>
     </div>
   </div>
 </div>
 
-<!-- Toast container -->
-<div class="toast-wrap" id="toast-wrap"></div>
+<!-- New folder -->
+<div class="back" id="m-mkdir">
+  <div class="modal" style="max-width:390px" role="dialog" aria-modal="true" aria-labelledby="m-mkdir-t">
+    <div class="m-h">
+      <div class="m-t" id="m-mkdir-t">New folder</div>
+      <button class="m-x" onclick="hideModal('m-mkdir')" aria-label="Close"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-b">
+      <div class="fld">
+        <label class="fl" for="mkdir-name">Name</label>
+        <input class="in" id="mkdir-name" type="text" placeholder="reports" autocomplete="off" spellcheck="false"
+               onkeydown="if(event.key==='Enter')doMkdir()">
+        <div class="hint">S3 has no folders. This writes an empty object ending in <b>/</b> so the prefix shows up in listings.</div>
+      </div>
+      <div class="card" style="margin:13px 0 0">
+        <svg class="ic ic-sm"><use href="#i-dir"/></svg>
+        <div class="card-b"><div class="card-t" id="mkdir-prev">—</div></div>
+      </div>
+    </div>
+    <div class="m-f">
+      <button class="btn btn-g" onclick="hideModal('m-mkdir')">Cancel</button>
+      <button class="btn btn-p" onclick="doMkdir()">Create folder</button>
+    </div>
+  </div>
+</div>
 
-<!-- ══════════════════════════════════════════════════
-     SCRIPT
-══════════════════════════════════════════════════ -->
+<!-- Delete -->
+<div class="back" id="m-del">
+  <div class="modal" style="max-width:400px" role="dialog" aria-modal="true" aria-labelledby="m-del-t">
+    <div class="m-h">
+      <div class="m-t" id="m-del-t">Delete</div>
+      <button class="m-x" onclick="hideModal('m-del')" aria-label="Close"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-b" id="m-del-b"></div>
+    <div class="m-f">
+      <button class="btn btn-g" onclick="hideModal('m-del')">Cancel</button>
+      <button class="btn btn-d" onclick="confirmDelete()"><svg class="ic ic-sm"><use href="#i-trash"/></svg> Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share -->
+<div class="back" id="m-share">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-share-t">
+    <div class="m-h">
+      <div class="m-t" id="m-share-t">Share link</div>
+      <button class="m-x" onclick="hideModal('m-share')" aria-label="Close"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-b">
+      <div class="card">
+        <svg class="ic ic-sm"><use href="#i-file"/></svg>
+        <div class="card-b"><div class="card-t" id="share-uri">—</div>
+        <div class="card-s">Signed with the active connection's key. It stops working when that key is rotated.</div></div>
+      </div>
+      <div class="fld">
+        <label class="fl" for="share-exp">Link expires in</label>
+        <select class="in" id="share-exp" onchange="genPresign()">
+          <option value="300">5 minutes</option>
+          <option value="3600" selected>1 hour</option>
+          <option value="86400">24 hours</option>
+          <option value="604800">7 days</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label class="fl" for="share-url">Presigned URL</label>
+        <textarea class="in" id="share-url" readonly spellcheck="false" onclick="this.select()"></textarea>
+      </div>
+    </div>
+    <div class="m-f">
+      <button class="btn btn-g" onclick="hideModal('m-share')">Done</button>
+      <button class="btn btn-p" onclick="copyPresign()"><svg class="ic ic-sm"><use href="#i-copy"/></svg> Copy link</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload progress -->
+<div class="back" id="m-upload">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-upload-t">
+    <div class="m-h">
+      <div class="m-t" id="m-upload-t">Uploading</div>
+    </div>
+    <div class="m-b"><div class="ups" id="up-list"></div></div>
+    <div class="m-f"><button class="btn btn-p" id="up-done" disabled onclick="hideModal('m-upload');refresh()">Done</button></div>
+  </div>
+</div>
+
+<!-- Save encrypted to file -->
+<div class="back" id="m-file-save">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-fs-t">
+    <div class="m-h">
+      <div class="m-t" id="m-fs-t">Save encrypted to file</div>
+      <button class="m-x" onclick="hideModal('m-file-save')" aria-label="Close"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-b">
+      <div class="card">
+        <svg class="ic"><use href="#i-lock"/></svg>
+        <div class="card-b">
+          <div class="card-t" id="fx-count">—</div>
+          <div class="card-s">AES-256-GCM. Keys, secrets, buckets, names and endpoints all sit inside the ciphertext.</div>
+        </div>
+      </div>
+      <div class="fld">
+        <label class="fl" for="fx-p1">Passphrase for this file</label>
+        <div class="pw">
+          <input class="in" id="fx-p1" type="password" placeholder="Three or four unrelated words" autocomplete="new-password" oninput="scorePw('fx-p1','fx-meter','fx-lbl')">
+          <button class="pw-eye" onclick="togglePw('fx-p1',this)" aria-label="Show passphrase"><svg class="ic ic-sm"><use href="#i-eye"/></svg></button>
+        </div>
+        <div class="meter" id="fx-meter"><i></i><i></i><i></i><i></i></div>
+        <div class="meter-l" id="fx-lbl"></div>
+      </div>
+      <div class="fld">
+        <label class="fl" for="fx-p2">Repeat passphrase</label>
+        <div class="pw">
+          <input class="in" id="fx-p2" type="password" placeholder="••••••••••••••••" autocomplete="new-password"
+                 onkeydown="if(event.key==='Enter')saveToFile()">
+          <button class="pw-eye" onclick="togglePw('fx-p2',this)" aria-label="Show passphrase"><svg class="ic ic-sm"><use href="#i-eye"/></svg></button>
+        </div>
+      </div>
+      <div class="warn"><svg class="ic ic-sm"><use href="#i-alert"/></svg>
+        <div>Nothing here can recover this passphrase. Lose it and the file is scrap.</div></div>
+      <div class="err hidden" id="fx-err"><svg class="ic ic-sm"><use href="#i-alert"/></svg><span></span></div>
+    </div>
+    <div class="m-f">
+      <button class="btn btn-g" onclick="hideModal('m-file-save')">Cancel</button>
+      <button class="btn btn-p" id="fx-btn" onclick="saveToFile()"><svg class="ic ic-sm"><use href="#i-save"/></svg> Encrypt and download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Load credentials from a file -->
+<div class="back" id="m-file-load">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-fl-t">
+    <div class="m-h">
+      <div class="m-t" id="m-fl-t">Load credentials from a file</div>
+      <button class="m-x" onclick="cancelFileLoad()" aria-label="Close"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-b">
+      <div class="card">
+        <svg class="ic"><use href="#i-file"/></svg>
+        <div class="card-b">
+          <div class="card-t" id="fm-name">—</div>
+          <div class="card-s" id="fm-info">—</div>
+        </div>
+      </div>
+      <div class="fld">
+        <label class="fl" for="fm-pass">Passphrase this file was saved with</label>
+        <div class="pw">
+          <input class="in" id="fm-pass" type="password" placeholder="••••••••••••••••" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter')loadFromFile()">
+          <button class="pw-eye" onclick="togglePw('fm-pass',this)" aria-label="Show passphrase"><svg class="ic ic-sm"><use href="#i-eye"/></svg></button>
+        </div>
+      </div>
+      <div class="fld hidden" id="fm-mode-wrap">
+        <div class="fl">You already have connections loaded</div>
+        <button class="pick on" id="fm-opt-merge" onclick="setLoadMode('merge')">
+          <span class="pick-r"></span>
+          <span><span class="pick-t">Keep both</span><span class="pick-d">Add the file's connections to the ones already here. Exact duplicates are skipped.</span></span>
+        </button>
+        <button class="pick" id="fm-opt-replace" onclick="setLoadMode('replace')">
+          <span class="pick-r"></span>
+          <span><span class="pick-t">Replace</span><span class="pick-d">Drop the current list and use only what the file holds.</span></span>
+        </button>
+      </div>
+      <div class="err hidden" id="fm-err"><svg class="ic ic-sm"><use href="#i-alert"/></svg><span></span></div>
+    </div>
+    <div class="m-f">
+      <button class="btn btn-g" onclick="cancelFileLoad()">Cancel</button>
+      <button class="btn btn-p" id="fm-btn" onclick="loadFromFile()"><svg class="ic ic-sm"><use href="#i-import"/></svg> Decrypt and load</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help -->
+<div class="back" id="m-help">
+  <div class="modal" style="max-width:540px" role="dialog" aria-modal="true" aria-labelledby="m-help-t">
+    <div class="m-h">
+      <div class="m-t" id="m-help-t">Help and setup</div>
+      <button class="m-x" onclick="hideModal('m-help')" aria-label="Close"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-b doc">
+      <h4>Keyboard</h4>
+      <div class="keys">
+        <kbd>⌘K</kbd><span>Command palette — jump to a prefix, switch bucket, run anything</span>
+        <kbd>⌘L</kbd><span>Edit the address bar</span>
+        <kbd>↑ ↓</kbd><span>Move through objects</span>
+        <kbd>↵</kbd><span>Open a prefix, or download a file</span>
+        <kbd>⌫</kbd><span>Up one prefix</span>
+        <kbd>space</kbd><span>Select the object under the cursor</span>
+        <kbd>⌘A</kbd><span>Select everything in view</span>
+        <kbd>/</kbd><span>Focus the filter</span>
+        <kbd>R</kbd><span>Refresh</span>
+        <kbd>del</kbd><span>Delete the selection</span>
+      </div>
+
+      <h4>The address bar</h4>
+      S3 stores keys, not folders — a folder is just a shared key prefix. The bar at the top is the real thing: click it or press <kbd>⌘L</kbd>
+      and type any <code>bucket/prefix/</code> to jump straight there. Naming a different bucket switches to the matching connection.
+
+      <h4>CORS rules</h4>
+      A browser cannot read a bucket that does not allow it. In the AWS console under <b>S3 → your bucket → Permissions → CORS</b>, paste:
+      <pre>[{
+  "AllowedHeaders": ["*"],
+  "AllowedMethods": ["GET","PUT","POST","DELETE","HEAD"],
+  "AllowedOrigins": ["*"],
+  "ExposeHeaders": ["ETag"]
+}]</pre>
+      Narrow <code>AllowedOrigins</code> to the exact origin serving this page once it works.
+
+      <h4>Permissions to grant</h4>
+      <code>s3:ListBucket</code>, <code>s3:GetObject</code>, <code>s3:PutObject</code>, <code>s3:DeleteObject</code> — scoped to the one bucket.
+
+      <h4>Where credentials live</h4>
+      Nothing is kept in this browser. Credentials sit in <code>sessionStorage</code> for this tab and disappear when you close it, so a
+      stolen or synced browser profile holds no keys.
+
+      <h4>Save encrypted to file, load from file</h4>
+      <b>Save encrypted to file</b> writes your connections to a <code>.s3vault</code> file: AES-256-GCM, key derived from a passphrase you choose
+      with PBKDF2-HMAC-SHA256 at 310,000 iterations, random 16-byte salt, fresh IV per save. The file is unreadable without the passphrase,
+      so it is safe to back up or carry between machines. <b>Load from file</b> decrypts in memory and either adds to your list or replaces
+      it. A wrong passphrase or an edited file fails to decrypt rather than loading anything.
+
+      <h4>What encryption does not cover</h4>
+      While you are connected the plaintext keys are in page memory, so anything running in this page can read them — XSS, a browser
+      extension, or a tampered CDN script (the AWS SDK loads from <code>sdk.amazonaws.com</code>). A leaked file cannot be revoked either:
+      changing the passphrase does not help, because the old copy still opens with the old one. If a file goes missing, rotate the S3 keys
+      themselves. Scope credentials to one bucket, grant the four actions above and nothing more, and keep the file where you would keep a
+      password database.
+    </div>
+    <div class="m-f"><button class="btn btn-p" onclick="hideModal('m-help')">Close</button></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <script>
 'use strict';
 
-// ─────────────────────────────────────────────
-//  STATE
-// ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════════════ */
 let S3 = null;
 let bucket = '', prefix = '';
-let rawFolders = [], rawFiles = [];
-let items = [];          // currently rendered (filtered + sorted)
-let selKeys = new Set(); // selected S3 keys
-let sortKey = 'name', sortDir = 'asc';
-let filterQ = '';
-let pendingDelKeys = [];
-let shareKey = '';
+let rawFolders = [], rawFiles = [], items = [];
+let selKeys = new Set();
+let cursor = -1, anchor = -1;
+let sortKey = 'name', sortDir = 'asc', filterQ = '';
+let viewMode = 'list';
+let pendingDelKeys = [], shareKey = '';
+let truncated = false;
 
-// Multi-bucket
-let connections = [];    // [{id, label, key, sec, reg, bkt, ep}, …]
-let activeConnId = null; // id of the currently active connection
+let connections = [];
+let activeConnId = null;
 
-// ─────────────────────────────────────────────
-//  INIT
-// ─────────────────────────────────────────────
+let pendingFile = null;
+let loadMode = 'merge';
+
+let palIdx = 0, palRows = [];
+let addrCommitting = false;
+let lastFocus = null;
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
-  // HTTPS check
-  const host = location.hostname;
-  if (location.protocol !== 'https:' && host !== 'localhost' && host !== '127.0.0.1') {
-    el('https-warn').classList.remove('hidden');
+  const h = location.hostname;
+  if (location.protocol !== 'https:' && h !== 'localhost' && h !== '127.0.0.1') {
+    el('tls-warn').classList.remove('hidden');
   }
 
-  // Restore session (supports both old single-bucket and new multi-bucket format)
-  const c = loadCreds();
-  if (c.connections && Array.isArray(c.connections)) {
-    // New multi-bucket format
-    connections = c.connections;
-    renderBucketList();
-    if (c.activeConnId) connectById(c.activeConnId, true);
-  } else if (c.key) {
-    // Migrate old single-connection format
-    const conn = { id: mkuid(), label: c.bkt || 'Bucket', key: c.key, sec: c.sec, reg: c.reg || 'us-east-1', bkt: c.bkt || '', ep: c.ep || '' };
-    connections = [conn];
-    renderBucketList();
-    if (c.key && c.sec && c.bkt) connectById(conn.id, true);
-  } else {
-    renderBucketList();
-  }
+  restoreSession();
+  renderStorageUI();
+  syncSort();
+  buildAddr();
+  updateChrome();
 
+  el('mkdir-name').addEventListener('input', mkdirPrev);
   setupDrop();
+  document.addEventListener('keydown', onKey);
 
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') $$('.backdrop.open').forEach(b => b.classList.remove('open'));
-    if ((e.ctrlKey || e.metaKey) && e.key === 'a' && S3) { e.preventDefault(); selectAll(); }
-    if (e.key === 'Delete' && selKeys.size > 0 && S3) deleteSelected();
-    if (e.key === 'F5'     && S3) { e.preventDefault(); refresh(); }
+  document.querySelectorAll('.back').forEach(b =>
+    b.addEventListener('mousedown', e => { if (e.target === b) hideModal(b.id); }));
+
+  // Address-bar segments and object rows both use delegation, so keys
+  // containing quotes or angle brackets can never end up inside markup.
+  el('addr-path').addEventListener('click', e => {
+    const b = e.target.closest('[data-p]');
+    if (b) { e.stopPropagation(); goPrefix(b.dataset.p); }
   });
-
-  $$('.backdrop').forEach(b => b.addEventListener('click', e => {
-    if (e.target === b) b.classList.remove('open');
-  }));
+  el('st-list').addEventListener('click', onListClick);
+  el('st-list').addEventListener('dblclick', onListDbl);
 });
 
-// ─────────────────────────────────────────────
-//  CREDENTIALS  (multi-bucket)
-// ─────────────────────────────────────────────
-function loadCreds() {
-  try { return JSON.parse(sessionStorage.getItem('s3b')) || {}; } catch { return {}; }
-}
-function saveCreds() {
-  try { sessionStorage.setItem('s3b', JSON.stringify({ connections, activeConnId })); } catch {}
-}
-function clearSession() {
-  sessionStorage.removeItem('s3b');
-  connections = []; activeConnId = null;
-  disconnect();
-  renderBucketList();
-  toast('Session cleared', 'inf');
+/* ═══════════════════════════════════════════════════════════════════
+   KEYBOARD
+
+   The audience lives in a terminal, so everything reachable by mouse is
+   reachable by key. Typing keys are ignored while a text field has focus.
+   ═══════════════════════════════════════════════════════════════════ */
+function onKey(e) {
+  const mod = e.ctrlKey || e.metaKey;
+  const tag = (e.target.tagName || '').toLowerCase();
+  const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+  if (el('pal').classList.contains('on')) return;   // palette owns its keys
+
+  if (e.key === 'Escape') {
+    const open = [...document.querySelectorAll('.back.on')].pop();
+    if (open) { hideModal(open.id); return; }
+    if (el('addr').classList.contains('edit')) { cancelAddr(); return; }
+    if (filterQ) { clearSeek(); return; }
+    if (selKeys.size) { clearSel(); return; }
+    return;
+  }
+
+  // A dialog is modal: nothing outside it should respond, or shortcuts end
+  // up driving the interface hidden behind the overlay. Tab cycles within.
+  if (document.querySelector('.back.on')) { if (e.key === 'Tab') trapTab(e); return; }
+
+  if (mod && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); openPalette(); return; }
+  if (mod && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); editAddr(); return; }
+  if (typing) return;
+
+  if (mod && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); if (S3) selectAll(); return; }
+  if (e.key === '/') { e.preventDefault(); el('seek').focus(); return; }
+  if (!S3) return;
+
+  switch (e.key) {
+    case 'ArrowDown': e.preventDefault(); moveCursor(1); break;
+    case 'ArrowUp':   e.preventDefault(); moveCursor(-1); break;
+    case 'Home':      e.preventDefault(); setCursor(0); break;
+    case 'End':       e.preventDefault(); setCursor(items.length - 1); break;
+    case 'ArrowRight':
+    case 'Enter': {
+      const it = items[cursor];
+      if (!it) break;
+      e.preventDefault();
+      if (it.type === 'folder') goPrefix(it.key); else downloadItem(it);
+      break;
+    }
+    case 'ArrowLeft':
+    case 'Backspace': e.preventDefault(); goUp(); break;
+    case ' ': {
+      if (cursor < 0 || !items[cursor]) break;
+      e.preventDefault();
+      toggleSel(items[cursor].key);
+      break;
+    }
+    case 'Delete': if (selKeys.size) deleteSelected(); break;
+    case 'r': case 'R': refresh(); break;
+    case 'g': case 'G': setView(viewMode === 'list' ? 'grid' : 'list'); break;
+  }
 }
 
-// ─────────────────────────────────────────────
-//  BUCKET LIST UI
-// ─────────────────────────────────────────────
+function trapTab(e) {
+  const m = [...document.querySelectorAll('.back.on')].pop();
+  if (!m) return;
+  const f = [...m.querySelectorAll('button,[href],input:not([type=hidden]),select,textarea,[tabindex]:not([tabindex="-1"])')]
+    .filter(n => !n.disabled && n.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ADDRESS BAR — the signature control
+
+   S3 has no directories; a "folder" is just a set of keys sharing a
+   prefix. So the bar shows the genuine article and lets you type it.
+   ═══════════════════════════════════════════════════════════════════ */
+function buildAddr() {
+  const wrap = el('addr'), path = el('addr-path');
+  if (!S3) {
+    wrap.classList.add('off');
+    path.innerHTML = `<span class="seg last" style="color:var(--ink3)">not connected</span>`;
+    return;
+  }
+  wrap.classList.remove('off');
+  const segs = prefix.split('/').filter(Boolean);
+  const parts = [`<button class="addr-bkt" data-p="" title="Bucket root">${x(bucket)}</button>`];
+  let acc = '';
+  segs.forEach((s, i) => {
+    acc += s + '/';
+    parts.push(`<span class="sep">/</span>`);
+    parts.push(`<button class="seg${i === segs.length - 1 ? ' last' : ''}" data-p="${x(acc)}">${x(s)}</button>`);
+  });
+  parts.push(`<span class="sep">/</span>`);
+  path.innerHTML = parts.join('');
+}
+
+function editAddr() {
+  if (!S3 || el('addr').classList.contains('edit')) return;
+  const inp = el('addr-in');
+  inp.value = bucket + '/' + prefix;
+  el('addr').classList.add('edit', 'on');
+  inp.focus();
+  inp.select();          // typing replaces, as in a browser address bar
+}
+
+function cancelAddr() {
+  if (addrCommitting) return;
+  el('addr').classList.remove('edit', 'on');
+}
+
+// Enter or Space on the focused bar starts editing, so the control is
+// usable without a pointer.
+function addrOpenKey(e) {
+  if (e.target !== el('addr')) return;             // let the input handle its own keys
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editAddr(); }
+}
+
+function addrKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); commitAddr(); }
+  else if (e.key === 'Escape') { e.preventDefault(); el('addr-in').blur(); }
+}
+
+async function commitAddr() {
+  const raw = el('addr-in').value.trim().replace(/^s3:\/\//i, '').replace(/^\/+/, '');
+  const cut = raw.indexOf('/');
+  const wantBkt = cut === -1 ? raw : raw.slice(0, cut);
+  const wantPre = cut === -1 ? '' : raw.slice(cut + 1);
+  if (!wantBkt) { toast('Enter a bucket, optionally followed by a prefix', 'err'); return; }
+
+  addrCommitting = true;
+  el('addr').classList.remove('edit', 'on');
+  el('addr-in').blur();
+
+  try {
+    if (wantBkt !== bucket) {
+      const target = connections.find(c => c.bkt === wantBkt);
+      if (!target) {
+        toast(`No connection for bucket "${wantBkt}" — add one first`, 'err');
+        buildAddr();
+        return;
+      }
+      prefix = normPrefix(wantPre);
+      await connectById(target.id, true);
+      return;
+    }
+    await goPrefix(normPrefix(wantPre));
+  } finally {
+    addrCommitting = false;
+  }
+}
+
+function normPrefix(p) {
+  p = String(p || '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
+  if (p && !p.endsWith('/')) p += '/';
+  return p;
+}
+
+async function goPrefix(p) {
+  if (!S3) return;
+  prefix = normPrefix(p);
+  clearSel();
+  cursor = -1;
+  await load();
+}
+
+function goUp() {
+  if (!S3 || !prefix) return;
+  const segs = prefix.split('/').filter(Boolean);
+  segs.pop();
+  goPrefix(segs.length ? segs.join('/') + '/' : '');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONNECTIONS
+   ═══════════════════════════════════════════════════════════════════ */
 function mkuid() {
   return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
 }
 
-function renderBucketList() {
-  const list = el('bucket-list');
+function renderConns() {
+  const box = el('conns');
+  el('conn-count').textContent = String(connections.length);
   if (!connections.length) {
-    list.innerHTML = '<div class="bkt-empty">No connections yet.<br>Click <strong style="color:var(--txt2)">+ Add</strong> to get started.</div>';
+    box.innerHTML = `<div class="empty-note">No connections yet.<br>Add one, or load an encrypted file.</div>`;
+    renderStorageUI();
     return;
   }
-  list.innerHTML = connections.map(c => {
-    let sub = x(c.bkt);
-    if (c.ep) { try { sub += ' · ' + new URL(c.ep).hostname; } catch {} }
-    const active = c.id === activeConnId;
-    return `<div class="bkt-item${active ? ' active' : ''}" onclick="switchBucket('${x(c.id)}')">
-      <div class="bkt-dot${active ? ' on' : ''}"></div>
-      <div class="bkt-lbl">
-        <div class="bkt-name">${x(c.label || c.bkt)}</div>
-        <div class="bkt-sub">${sub}</div>
-      </div>
-      <button class="bkt-rm" onclick="removeConn('${x(c.id)}',event)" title="Remove connection">✕</button>
+  box.innerHTML = connections.map(c => {
+    let sub = c.bkt;
+    if (c.ep) { try { sub += ' · ' + new URL(c.ep).hostname; } catch { /* keep bucket only */ } }
+    else sub += ' · ' + (c.reg || 'us-east-1');
+    const on = c.id === activeConnId;
+    const name = x(c.label || c.bkt);
+    return `<div class="conn${on ? ' on' : ''}">
+      <button class="conn-main" data-id="${x(c.id)}" title="${name}"${on ? ' aria-current="true"' : ''}>
+        <span class="conn-d"></span>
+        <span class="conn-b">
+          <span class="conn-n">${name}</span>
+          <span class="conn-s">${x(sub)}</span>
+        </span>
+      </button>
+      <button class="conn-x" data-rm="${x(c.id)}" aria-label="Remove ${name}">
+        <svg class="ic ic-sm"><use href="#i-x"/></svg>
+      </button>
     </div>`;
   }).join('');
+
+  renderStorageUI();
+  // Two sibling buttons rather than one nested inside the other, so both are
+  // reachable by keyboard and the markup stays valid.
+  box.querySelectorAll('.conn-main').forEach(b =>
+    b.addEventListener('click', () => switchBucket(b.dataset.id)));
+  box.querySelectorAll('.conn-x').forEach(b =>
+    b.addEventListener('click', () => removeConn(b.dataset.rm)));
 }
 
-// ─────────────────────────────────────────────
-//  CONNECT / DISCONNECT  (multi-bucket)
-// ─────────────────────────────────────────────
 async function switchBucket(id) {
-  if (id === activeConnId && S3) return; // already active
+  if (id === activeConnId && S3) return;
   prefix = '';
   await connectById(id);
 }
@@ -619,620 +840,1237 @@ async function connectById(id, silent = false) {
   const conn = connections.find(c => c.id === id);
   if (!conn) return;
 
-  const cfg = { accessKeyId: conn.key, secretAccessKey: conn.sec, region: conn.reg || 'us-east-1', signatureVersion: 'v4' };
+  const cfg = {
+    accessKeyId: conn.key, secretAccessKey: conn.sec,
+    region: conn.reg || 'us-east-1', signatureVersion: 'v4',
+  };
   if (conn.ep) { cfg.endpoint = conn.ep; cfg.s3ForcePathStyle = true; }
 
   AWS.config.update(cfg);
   S3 = new AWS.S3();
-  bucket  = conn.bkt;
-  prefix  = '';
+  bucket = conn.bkt;
   activeConnId = id;
 
   saveCreds();
-  renderBucketList();
-  setUI(true);
+  renderConns();
+  updateChrome();
+  buildAddr();
   await load();
-  if (!silent) toast(`Connected to "${conn.bkt}"`, 'ok');
+  if (!silent) toast(`Connected to ${conn.bkt}`, 'ok');
 }
 
 function showAddConn() {
-  el('nc-err').classList.add('hidden');
-  el('nc-label').value = '';
-  el('nc-key').value   = '';
-  el('nc-sec').value   = '';
-  el('nc-reg').value   = 'us-east-1';
-  el('nc-bkt').value   = '';
-  el('nc-ep').value    = '';
-  openModal('md-addconn');
+  hideErr('nc-err');
+  ['nc-label', 'nc-key', 'nc-sec', 'nc-bkt', 'nc-reg', 'nc-ep'].forEach(i => el(i).value = '');
+  showModal('m-addconn');
   setTimeout(() => el('nc-key').focus(), 60);
 }
 
 async function saveNewConn() {
-  const label = g('nc-label');
-  const key   = g('nc-key'), sec = g('nc-sec');
-  const reg   = g('nc-reg') || 'us-east-1';
-  const bkt   = g('nc-bkt');
-  const ep    = g('nc-ep');
+  const label = g('nc-label'), key = g('nc-key'), sec = g('nc-sec');
+  const bkt = g('nc-bkt'), ep = g('nc-ep');
+  const reg = g('nc-reg') || 'us-east-1';   // placeholder is the default
 
-  const errEl = el('nc-err');
-  errEl.classList.add('hidden');
-  if (!key) { errEl.textContent = 'Access Key ID is required';    errEl.classList.remove('hidden'); return; }
-  if (!sec) { errEl.textContent = 'Secret Access Key is required'; errEl.classList.remove('hidden'); return; }
-  if (!bkt) { errEl.textContent = 'Bucket name is required';       errEl.classList.remove('hidden'); return; }
+  hideErr('nc-err');
+  if (!key) return showErr('nc-err', 'Enter the access key ID');
+  if (!sec) return showErr('nc-err', 'Enter the secret access key');
+  if (!bkt) return showErr('nc-err', 'Enter the bucket name');
+  if (ep && !/^https?:\/\//i.test(ep)) return showErr('nc-err', 'Endpoint must start with http:// or https://');
 
   const conn = { id: mkuid(), label: label || bkt, key, sec, reg, bkt, ep };
   connections.push(conn);
+  prefix = '';
   saveCreds();
-  renderBucketList();
-  closeModal('md-addconn');
+  renderConns();
+  hideModal('m-addconn');
   await connectById(conn.id);
 }
 
-function removeConn(id, e) {
-  if (e) e.stopPropagation();
+function removeConn(id) {
+  const conn = connections.find(c => c.id === id);
+  const wasActive = activeConnId === id;
   connections = connections.filter(c => c.id !== id);
+  saveCreds();
 
-  if (activeConnId === id) {
-    // Clear active state first
-    S3 = null; bucket = ''; prefix = '';
-    activeConnId = null;
-    rawFolders = []; rawFiles = []; items = []; selKeys.clear();
-    setUI(false);
-    showState('s-connect');
-    buildPathbar();
-    // Auto-switch to first remaining connection
+  if (wasActive) {
+    disconnect();                            // resets state and repaints
     if (connections.length) {
-      saveCreds();
-      renderBucketList();
-      connectById(connections[0].id, true);
+      connectById(connections[0].id, true);  // fall through to the next one
       return;
     }
+  } else {
+    renderConns();
   }
-  saveCreds();
-  renderBucketList();
-  toast('Connection removed', 'inf');
+  toast(`Removed ${conn ? conn.label || conn.bkt : 'connection'}`, 'inf');
 }
 
 function disconnect() {
   S3 = null; bucket = ''; prefix = '';
   activeConnId = null;
-  rawFolders = []; rawFiles = []; items = []; selKeys.clear();
-  setUI(false);
-  showState('s-connect');
-  buildPathbar();
-  renderBucketList();
+  rawFolders = []; rawFiles = []; items = [];
+  selKeys.clear(); cursor = -1; truncated = false;
+  updateChrome();
+  buildAddr();
+  showState('st-none');
+  renderConns();
 }
 
-function setUI(on) {
-  const b = el('badge');
-  b.className   = 'badge ' + (on ? 'on' : 'off');
-  b.textContent = on ? bucket : 'Disconnected';
-  el('btn-up').disabled    = !on;
-  el('btn-mkdir').disabled = !on;
-  el('stats-sec').classList.toggle('hidden', !on);
-  if (!on) { setStats(0, 0, 0); updateSelUI(); }
+function updateChrome() {
+  const on = !!S3;
+  el('b-upload').disabled = !on;
+  el('b-mkdir').disabled = !on;
+  el('b-refresh').disabled = !on;
+  el('b-up').disabled = !on || !prefix;
+  el('seek').disabled = !on;
+  updateSelUI();
+  updateStatus();
 }
 
-// ─────────────────────────────────────────────
-//  LOAD
-// ─────────────────────────────────────────────
+function updateStatus() {
+  const conn = connections.find(c => c.id === activeConnId);
+  if (!S3) {
+    el('st-info').textContent = connections.length ? 'Pick a connection to start' : 'Not connected';
+    el('st-endpoint').textContent = '';
+    el('st-trunc').classList.add('hidden');
+    return;
+  }
+  const bytes = rawFiles.reduce((s, f) => s + (f.size || 0), 0);
+  const p = rawFolders.length, o = rawFiles.length;
+  el('st-info').innerHTML =
+    `<b>${p}</b> ${p === 1 ? 'prefix' : 'prefixes'} · <b>${o}</b> ${o === 1 ? 'object' : 'objects'} · <b>${fmtSize(bytes)}</b>`;
+  let right = conn ? (conn.reg || 'us-east-1') : '';
+  if (conn && conn.ep) { try { right = new URL(conn.ep).hostname; } catch { /* fall back to region */ } }
+  el('st-endpoint').textContent = right;
+  el('st-trunc').classList.toggle('hidden', !truncated);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIST
+   ═══════════════════════════════════════════════════════════════════ */
 async function load() {
   if (!S3) return;
-  showState('s-load');
+  showState('st-load');
   selKeys.clear();
   updateSelUI();
 
   try {
     const data = await s3api('listObjectsV2', {
-      Bucket: bucket, Prefix: prefix, Delimiter: '/', MaxKeys: 1000
+      Bucket: bucket, Prefix: prefix, Delimiter: '/', MaxKeys: 1000,
     });
 
     rawFolders = (data.CommonPrefixes || []).map(cp => ({
-      type: 'folder',
-      key: cp.Prefix,
+      type: 'folder', key: cp.Prefix,
       name: cp.Prefix.slice(prefix.length).replace(/\/$/, ''),
-      size: null,
-      date: null,
+      size: null, date: null,
     }));
 
     rawFiles = (data.Contents || [])
       .filter(o => o.Key !== prefix)
-      .map(o => ({
-        type: 'file',
-        key: o.Key,
-        name: o.Key.slice(prefix.length),
-        size: o.Size,
-        date: o.LastModified,
-      }));
+      .map(o => ({ type: 'file', key: o.Key, name: o.Key.slice(prefix.length), size: o.Size, date: o.LastModified }));
 
-    el('truncated-note').classList.toggle('hidden', !data.IsTruncated);
-    setStats(rawFiles.length, rawFolders.length, rawFiles.reduce((s, f) => s + (f.size || 0), 0));
+    truncated = !!data.IsTruncated;
     render();
-    buildPathbar();
+    buildAddr();
+    updateChrome();
 
   } catch (err) {
-    showState('s-connect');
     let msg = err.message || 'Unknown error';
-    if (/CORS|Network|fetch|XMLHttp/i.test(msg)) {
-      msg = 'CORS error — your bucket needs cross-origin rules. Click ? for the CORS config to paste into AWS.';
+    if (/CORS|Network|fetch|XMLHttp|Failed to fetch/i.test(msg)) {
+      msg = 'The browser was blocked before it reached the bucket. This is almost always missing CORS rules.';
+    } else if (/AccessDenied|Forbidden/i.test(msg)) {
+      msg = 'The key was accepted but denied s3:ListBucket on this bucket.';
+    } else if (/NoSuchBucket/i.test(msg)) {
+      msg = `No bucket named ${bucket} in this region.`;
+    } else if (/NetworkingError|ENOTFOUND|getaddrinfo/i.test(msg)) {
+      msg = 'Could not reach the endpoint. Check the endpoint URL and region.';
     }
-    toast(msg, 'err');
+    el('st-err-s').textContent = msg;
+    showState('st-err');
+    updateChrome();
   }
 }
 
 async function refresh() {
   if (!S3) return;
-  const b = el('btn-ref');
-  b.style.transition = 'transform .5s';
+  const b = el('b-refresh');
+  b.style.transition = 'transform .55s cubic-bezier(.3,.9,.2,1)';
   b.style.transform = 'rotate(360deg)';
-  setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 500);
+  setTimeout(() => { b.style.transform = ''; b.style.transition = ''; }, 560);
   await load();
 }
 
-// ─────────────────────────────────────────────
-//  RENDER
-// ─────────────────────────────────────────────
 function render() {
   const q = filterQ.toLowerCase();
+  const ff = rawFolders.filter(f => !q || f.name.toLowerCase().includes(q));
+  const ft = rawFiles.filter(f => !q || f.name.toLowerCase().includes(q));
 
-  let ff = rawFolders.filter(f => !q || f.name.toLowerCase().includes(q));
-  let ft = rawFiles.filter(f => !q || f.name.toLowerCase().includes(q));
-
-  // Sort files
   ft.sort((a, b) => {
     let d = 0;
-    if (sortKey === 'name') d = a.name.localeCompare(b.name);
+    if (sortKey === 'name') d = a.name.localeCompare(b.name, undefined, { numeric: true });
     else if (sortKey === 'size') d = (a.size || 0) - (b.size || 0);
     else if (sortKey === 'date') d = +new Date(a.date) - +new Date(b.date);
     return sortDir === 'asc' ? d : -d;
   });
-
-  // Folders always alphabetical
-  ff.sort((a, b) => a.name.localeCompare(b.name));
+  // Prefixes carry no size or date, so only a name sort can meaningfully
+  // reverse them. Sorting by size must not shuffle the folders.
+  const dirMul = sortKey === 'name' && sortDir === 'desc' ? -1 : 1;
+  ff.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) * dirMul);
 
   items = [...ff, ...ft];
 
-  if (!items.length) { showState('s-empty'); return; }
-  showState('s-list');
-
-  const body = el('file-list-body');
-  body.innerHTML = '';
-
-  items.forEach((item, i) => {
-    const sel = selKeys.has(item.key);
-    const row = document.createElement('div');
-    row.className = 'file-row' + (sel ? ' sel' : '');
-    row.dataset.i = i;
-
-    row.innerHTML = `
-      <div class="fr-check">
-        <div class="checkbox${sel ? ' on' : ''}"></div>
-      </div>
-      <div class="fr-name">
-        <span class="f-icon">${fileIcon(item)}</span>
-        <span class="f-name${item.type === 'folder' ? ' folder-name' : ''}">${x(item.name)}${item.type === 'folder' ? '/' : ''}</span>
-      </div>
-      <div class="fr-size">${item.type === 'folder' ? '—' : fmtSize(item.size)}</div>
-      <div class="fr-date">${item.date ? fmtDate(item.date) : '—'}</div>
-      <div class="fr-actions">
-        ${item.type === 'file'
-          ? `<button class="act-btn" data-a="dl" title="Download">↓</button>
-             <button class="act-btn" data-a="sh" title="Get share link">⎘</button>
-             <button class="act-btn del" data-a="rm" title="Delete">✕</button>`
-          : `<button class="act-btn del" data-a="rm" title="Delete folder">✕</button>`}
-      </div>`;
-
-    // Checkbox click
-    row.querySelector('.fr-check').addEventListener('click', e => {
-      e.stopPropagation();
-      toggleSel(item.key);
-    });
-
-    // Row click → navigate folder
-    row.addEventListener('click', e => {
-      if (e.target.closest('.fr-check') || e.target.closest('[data-a]')) return;
-      if (item.type === 'folder') {
-        prefix = item.key;
-        selKeys.clear();
-        load();
-      }
-    });
-
-    // Action buttons
-    row.querySelectorAll('[data-a]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const a = btn.dataset.a;
-        if (a === 'dl') downloadItem(item);
-        else if (a === 'sh') showShare(item);
-        else if (a === 'rm') askDelete([item.key]);
-      });
-    });
-
-    body.appendChild(row);
-  });
-
-  // Status bar
-  const totalSz = ft.reduce((s, f) => s + (f.size || 0), 0);
-  el('sb-info').textContent = `${ff.length} folder${ff.length !== 1 ? 's' : ''}, ${ft.length} file${ft.length !== 1 ? 's' : ''} — ${fmtSize(totalSz)}`;
-  updateSelUI();
-}
-
-// ─────────────────────────────────────────────
-//  PATHBAR
-// ─────────────────────────────────────────────
-function buildPathbar() {
-  const pb = el('pathbar');
-  if (!bucket) {
-    pb.innerHTML = '<span class="pb-prompt">~</span><span class="crumb last">Connect to a bucket to get started</span>';
+  if (!items.length) {
+    if (rawFolders.length + rawFiles.length) {
+      showState('st-nomatch');            // the filter hid everything
+    } else {
+      el('st-empty-s').innerHTML = prefix
+        ? `Drop files anywhere on this window to upload them into <span class="mo" style="color:var(--ink)">${x(prefix)}</span>`
+        : `Drop files anywhere on this window to upload them into this bucket.`;
+      showState('st-empty');
+    }
+    updateStatus();
     return;
   }
 
-  pb.innerHTML = '';
-  const prompt = document.createElement('span');
-  prompt.className = 'pb-prompt'; prompt.textContent = '~';
-  pb.appendChild(prompt);
+  showState('st-list');
+  el('st-list').innerHTML = viewMode === 'grid' ? gridHTML() : listHTML();
+  if (cursor >= items.length) cursor = items.length - 1;
+  paintCursor(false);   // a re-render must not yank the viewport around
+  updateSelUI();
+  updateStatus();
+}
 
-  // Bucket root crumb
-  const rootCrumb = document.createElement('span');
-  rootCrumb.className = 'crumb';
-  rootCrumb.textContent = bucket;
-  rootCrumb.addEventListener('click', () => { prefix = ''; selKeys.clear(); load(); });
-  pb.appendChild(rootCrumb);
+function listHTML() {
+  return `<div class="list" role="presentation">` + items.map((it, i) => {
+    const gl = glyph(it);
+    const dir = it.type === 'folder';
+    const on = selKeys.has(it.key);
+    return `<div class="row${on ? ' sel' : ''}${dir ? ' nav' : ''}" data-i="${i}"
+      role="option" aria-selected="${on}" aria-label="${x(it.name)}${dir ? ' prefix' : ''}">
+      <div class="cell-c"><span class="cbox${selKeys.has(it.key) ? ' on' : ''}" data-sel="1">
+        <svg class="ic ic-sm"><use href="#i-check"/></svg></span></div>
+      <div class="cell-n">
+        <svg class="ic gl ${gl.c}"><use href="#${gl.s}"/></svg>
+        <span class="nm${dir ? ' dir' : ''}">${x(it.name)}${dir ? '/' : ''}</span>
+      </div>
+      <div class="cell-s col-s">${dir ? '—' : fmtSize(it.size)}</div>
+      <div class="cell-d col-d" title="${it.date ? x(fmtWhen(it.date)) : ''}">${it.date ? fmtDate(it.date) : '—'}</div>
+      <div class="cell-a">${dir ? '' : `
+        <button class="abtn" data-a="dl" aria-label="Download"><svg class="ic ic-sm"><use href="#i-down"/></svg></button>
+        <button class="abtn" data-a="sh" aria-label="Share link"><svg class="ic ic-sm"><use href="#i-link"/></svg></button>`}
+        <button class="abtn rm" data-a="rm" aria-label="Delete"><svg class="ic ic-sm"><use href="#i-trash"/></svg></button>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
 
-  if (prefix) {
-    const parts = prefix.split('/').filter(Boolean);
-    let acc = '';
-    parts.forEach((part, i) => {
-      acc += part + '/';
-      const sep = document.createElement('span');
-      sep.className = 'crumb-sep'; sep.textContent = '/';
-      pb.appendChild(sep);
+function gridHTML() {
+  return `<div class="tiles" role="presentation">` + items.map((it, i) => {
+    const gl = glyph(it);
+    const dir = it.type === 'folder';
+    const thumb = !dir && isImage(it.name) ? thumbURL(it.key) : null;
+    const on = selKeys.has(it.key);
+    return `<div class="tile${on ? ' sel' : ''}" data-i="${i}"
+      role="option" aria-selected="${on}" aria-label="${x(it.name)}${dir ? ' prefix' : ''}">
+      <div class="tile-c"><span class="cbox${selKeys.has(it.key) ? ' on' : ''}" data-sel="1">
+        <svg class="ic ic-sm"><use href="#i-check"/></svg></span></div>
+      <div class="tile-p">
+        <svg class="ic ${gl.c}${dir ? ' dir' : ''}"><use href="#${gl.s}"/></svg>
+        ${thumb ? `<img src="${x(thumb)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      </div>
+      <div class="tile-b">
+        <div class="tile-n">${x(it.name)}${dir ? '/' : ''}</div>
+        <div class="tile-m">${dir ? 'prefix' : fmtSize(it.size)}</div>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
 
-      const crumb = document.createElement('span');
-      const isLast = i === parts.length - 1;
-      crumb.className = 'crumb' + (isLast ? ' last' : '');
-      crumb.textContent = part;
-      if (!isLast) {
-        const captured = acc;
-        crumb.addEventListener('click', () => { prefix = captured; selKeys.clear(); load(); });
-      }
-      pb.appendChild(crumb);
-    });
+function onListClick(e) {
+  const node = e.target.closest('[data-i]');
+  if (!node) return;
+  const i = +node.dataset.i;
+  const it = items[i];
+  if (!it) return;
+
+  const act = e.target.closest('[data-a]');
+  if (act) {
+    e.stopPropagation();
+    if (act.dataset.a === 'dl') downloadItem(it);
+    else if (act.dataset.a === 'sh') showShare(it);
+    else if (act.dataset.a === 'rm') askDelete([it.key]);
+    return;
   }
 
-  const cursor = document.createElement('span');
-  cursor.className = 'cursor';
-  pb.appendChild(cursor);
+  if (e.target.closest('[data-sel]')) {
+    e.stopPropagation();
+    setCursor(i, true);
+    toggleSel(it.key);
+    return;
+  }
+
+  if (e.shiftKey && anchor >= 0) { selectRange(anchor, i); setCursor(i, true); return; }
+  if (e.ctrlKey || e.metaKey) { toggleSel(it.key); setCursor(i, true); return; }
+
+  if (it.type === 'folder') { goPrefix(it.key); return; }
+  selKeys.clear(); selKeys.add(it.key);
+  setCursor(i, true);
+  updateSelUI();
+  repaintSel();
 }
 
-function showState(id) {
-  ['s-connect','s-load','s-empty','s-list'].forEach(s =>
-    el(s).classList.toggle('hidden', s !== id));
+function onListDbl(e) {
+  const node = e.target.closest('[data-i]');
+  if (!node || e.target.closest('[data-a]') || e.target.closest('[data-sel]')) return;
+  const it = items[+node.dataset.i];
+  if (it && it.type === 'file') downloadItem(it);
 }
 
-// ─────────────────────────────────────────────
-//  SELECTION
-// ─────────────────────────────────────────────
+/* ── Cursor ───────────────────────────────────────────────────────── */
+function setCursor(i, quiet) {
+  cursor = Math.max(-1, Math.min(i, items.length - 1));
+  anchor = cursor;
+  paintCursor(!quiet);
+}
+function moveCursor(d) {
+  if (!items.length) return;
+  setCursor(cursor < 0 ? (d > 0 ? 0 : items.length - 1) : cursor + d);
+}
+function paintCursor(scroll) {
+  const list = el('st-list');
+  list.querySelectorAll('.cur').forEach(n => n.classList.remove('cur'));
+  if (cursor < 0) return;
+  const node = list.querySelector(`[data-i="${cursor}"]`);
+  if (!node) return;
+  node.classList.add('cur');
+  if (scroll !== false) node.scrollIntoView({ block: 'nearest' });
+}
+
+/* ── Selection ────────────────────────────────────────────────────── */
 function toggleSel(key) {
-  if (selKeys.has(key)) selKeys.delete(key);
-  else selKeys.add(key);
-  syncRowStyles();
+  if (selKeys.has(key)) selKeys.delete(key); else selKeys.add(key);
   updateSelUI();
+  repaintSel();
 }
-
+function selectRange(a, b) {
+  const [lo, hi] = a < b ? [a, b] : [b, a];
+  for (let i = lo; i <= hi; i++) if (items[i]) selKeys.add(items[i].key);
+  updateSelUI();
+  repaintSel();
+}
 function selectAll() {
-  if (selKeys.size === items.length) selKeys.clear();
-  else items.forEach(item => selKeys.add(item.key));
-  syncRowStyles();
+  const all = items.length > 0 && items.every(i => selKeys.has(i.key));
+  selKeys.clear();
+  if (!all) items.forEach(i => selKeys.add(i.key));
   updateSelUI();
+  repaintSel();
 }
-
-function syncRowStyles() {
-  $$('.file-row').forEach(row => {
-    const item = items[+row.dataset.i];
-    if (!item) return;
-    const on = selKeys.has(item.key);
-    row.classList.toggle('sel', on);
-    row.querySelector('.checkbox').className = 'checkbox' + (on ? ' on' : '');
+function clearSel() {
+  selKeys.clear();
+  updateSelUI();
+  repaintSel();
+}
+function repaintSel() {
+  el('st-list').querySelectorAll('[data-i]').forEach(n => {
+    const it = items[+n.dataset.i];
+    if (!it) return;
+    const on = selKeys.has(it.key);
+    n.classList.toggle('sel', on);
+    n.setAttribute('aria-selected', String(on));
+    const cb = n.querySelector('.cbox');
+    if (cb) cb.classList.toggle('on', on);
   });
 }
-
 function updateSelUI() {
-  const n = selKeys.size, total = items.length;
-  const ca = el('check-all');
-  if (ca) ca.className = 'checkbox' + (n > 0 && n === total ? ' on' : '');
-  el('btn-del-sel').classList.toggle('hidden', n === 0);
-  const sbs = el('sb-sel');
-  if (n > 0) { sbs.textContent = `${n} selected`; sbs.classList.remove('hidden'); }
-  else sbs.classList.add('hidden');
+  const n = selKeys.size;
+  el('selbar').classList.toggle('on', n > 0);
+  if (n) {
+    let bytes = 0;
+    for (const it of items) if (it.size && selKeys.has(it.key)) bytes += it.size;
+    el('selbar-c').innerHTML = `${n} selected <span>${fmtSize(bytes)}</span>`;
+  }
+  const all = items.length > 0 && n === items.length;
+  el('cbox-all').classList.toggle('on', all);
+  el('cbox-all').innerHTML = all ? `<svg class="ic ic-sm"><use href="#i-check"/></svg>` : '';
 }
 
-// ─────────────────────────────────────────────
-//  SORT & FILTER
-// ─────────────────────────────────────────────
+/* ── Sort, filter, view ───────────────────────────────────────────── */
 function setSort(k) {
   if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
   else { sortKey = k; sortDir = 'asc'; }
-
-  ['name','size','date'].forEach(c => {
-    el(`fh-${c}`).classList.toggle('sorted', c === k);
-    el(`sort-${c}`).textContent = c === k ? (sortDir === 'asc' ? '↑' : '↓') : '';
-  });
+  syncSort();
   render();
 }
+function syncSort() {
+  ['name', 'size', 'date'].forEach(k => {
+    const b = el('s-' + k);
+    b.classList.toggle('act', sortKey === k);
+    b.querySelector('.sort-i').classList.toggle('desc', sortKey === k && sortDir === 'desc');
+    b.setAttribute('aria-sort', sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+  });
+}
+function onSeek() {
+  filterQ = el('seek').value.trim();
+  el('seek-x').classList.toggle('hidden', !filterQ);
+  cursor = -1;
+  render();
+}
+function clearSeek() {
+  el('seek').value = '';
+  onSeek();
+}
+function setView(v) {
+  viewMode = v;
+  el('v-list').classList.toggle('on', v === 'list');
+  el('v-grid').classList.toggle('on', v === 'grid');
+  // showState owns column visibility; there is nothing to re-render when
+  // no bucket is open.
+  if (S3) render(); else el('cols').classList.add('hidden');
+}
 
-function applyFilter() { filterQ = el('search').value; render(); }
+function showState(id) {
+  ['st-none', 'st-load', 'st-empty', 'st-nomatch', 'st-err', 'st-list']
+    .forEach(s => el(s).classList.toggle('hidden', s !== id));
+  el('cols').classList.toggle('hidden', id !== 'st-list' || viewMode !== 'list');
+  if (id === 'st-load') {
+    el('st-load').innerHTML = Array.from({ length: 9 }, (_, i) => `
+      <div class="skel-row">
+        <div></div>
+        <div class="sk" style="width:${34 + (i * 13) % 46}%"></div>
+        <div class="sk col-s"></div>
+        <div class="sk col-d"></div>
+        <div></div>
+      </div>`).join('');
+  }
+}
 
-// ─────────────────────────────────────────────
-//  UPLOAD
-// ─────────────────────────────────────────────
-function triggerUpload() { el('file-in').click(); }
+/* ═══════════════════════════════════════════════════════════════════
+   COMMAND PALETTE
+   ═══════════════════════════════════════════════════════════════════ */
+function openPalette() {
+  lastFocus = document.activeElement;
+  el('pal').classList.add('on');
+  el('pal-in').value = '';
+  palIdx = 0;
+  renderPalette();
+  setTimeout(() => el('pal-in').focus(), 30);
+}
+function closePalette() {
+  el('pal').classList.remove('on');
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+
+function paletteSources() {
+  const out = [];
+  connections.forEach(c => {
+    if (c.id === activeConnId) return;
+    out.push({ g: 'Connections', t: `Switch to ${c.label || c.bkt}`, k: c.bkt, i: 'i-store',
+               run: () => switchBucket(c.id) });
+  });
+  items.forEach(it => out.push(it.type === 'folder'
+    ? { g: 'In this prefix', t: it.name + '/', i: 'i-dir', mo: 1, run: () => goPrefix(it.key) }
+    : { g: 'In this prefix', t: it.name, k: fmtSize(it.size), i: glyph(it).s, mo: 1, run: () => downloadItem(it) }));
+
+  const A = (t, i, run, k) => out.push({ g: 'Commands', t, i, run, k });
+  if (S3) {
+    A('Upload files', 'i-up', triggerUpload);
+    A('New folder', 'i-dir-plus', showMkdir);
+    A('Refresh', 'i-refresh', refresh, 'R');
+    if (prefix) A('Up one prefix', 'i-level-up', goUp, '⌫');
+    A(viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view', viewMode === 'list' ? 'i-grid' : 'i-list', () => setView(viewMode === 'list' ? 'grid' : 'list'), 'G');
+    A('Edit the address bar', 'i-pencil', editAddr, '⌘L');
+  }
+  A('Add connection', 'i-plus', showAddConn);
+  if (connections.length) A('Save encrypted to file', 'i-lock', promptSaveFile);
+  A('Load credentials from a file', 'i-import', promptLoadFile);
+  if (connections.length) A('Clear session', 'i-broom', clearSession);
+  A('Help and setup', 'i-help', () => showModal('m-help'));
+  return out;
+}
+
+// Subsequence match: every typed character must appear in order. Runs of
+// adjacent characters and matches at a word start score higher.
+function fuzzy(hay, needle) {
+  if (!needle) return 1;
+  const h = hay.toLowerCase(), n = needle.toLowerCase();
+  let hi = 0, score = 0, run = 0;
+  for (const ch of n) {
+    const at = h.indexOf(ch, hi);
+    if (at === -1) return 0;
+    run = at === hi ? run + 1 : 0;
+    score += 1 + run * 2 + (at === 0 || /[\s\-_/.]/.test(h[at - 1]) ? 3 : 0);
+    hi = at + 1;
+  }
+  return score / (1 + h.length * 0.02);
+}
+
+function renderPalette() {
+  const q = el('pal-in').value.trim();
+  palRows = paletteSources()
+    .map(r => ({ ...r, sc: fuzzy(r.t, q) }))
+    .filter(r => r.sc > 0)
+    .sort((a, b) => b.sc - a.sc)
+    .slice(0, 40);
+
+  if (palIdx >= palRows.length) palIdx = Math.max(0, palRows.length - 1);
+  const box = el('pal-l');
+  if (!palRows.length) {
+    box.innerHTML = `<div class="pal-e">Nothing matches “${x(q)}”</div>`;
+    return;
+  }
+  let html = '', lastG = '';
+  palRows.forEach((r, i) => {
+    if (r.g !== lastG) { html += `<div class="pal-g">${x(r.g)}</div>`; lastG = r.g; }
+    html += `<button class="pal-i${i === palIdx ? ' on' : ''}" data-r="${i}">
+      <svg class="ic ic-sm"><use href="#${r.i}"/></svg>
+      <span class="pal-t${r.mo ? ' mo' : ''}">${x(r.t)}</span>
+      ${r.k ? `<span class="pal-k">${x(r.k)}</span>` : ''}
+    </button>`;
+  });
+  box.innerHTML = html;
+  box.querySelectorAll('[data-r]').forEach(b =>
+    b.addEventListener('click', () => runPalette(+b.dataset.r)));
+  const on = box.querySelector('.pal-i.on');
+  if (on) on.scrollIntoView({ block: 'nearest' });
+}
+
+function paletteKey(e) {
+  if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); palIdx = Math.min(palIdx + 1, palRows.length - 1); renderPalette(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); palIdx = Math.max(palIdx - 1, 0); renderPalette(); }
+  else if (e.key === 'Enter') { e.preventDefault(); runPalette(palIdx); }
+}
+
+function runPalette(i) {
+  const r = palRows[i];
+  if (!r) return;
+  closePalette();
+  r.run();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   UPLOAD
+   ═══════════════════════════════════════════════════════════════════ */
+function triggerUpload() { if (S3) el('up-in').click(); }
 
 function handleFileInput() {
-  const inp = el('file-in');
+  const inp = el('up-in');
   if (inp.files.length) { doUpload([...inp.files]); inp.value = ''; }
 }
 
 async function doUpload(files) {
   if (!S3 || !files.length) return;
-  openModal('md-upload');
-  el('upload-list').innerHTML = '';
-  el('btn-upload-close').disabled = true;
+  showModal('m-upload');
+  el('up-list').innerHTML = '';
+  el('up-done').disabled = true;
+  el('m-upload-t').textContent = `Uploading ${files.length} file${files.length === 1 ? '' : 's'}`;
 
-  await Promise.all(files.map(file => new Promise(resolve => {
+  // Every row is drawn up front so the whole queue is visible, then the
+  // transfers run a few at a time. Handing the browser fifty simultaneous
+  // PUTs makes them contend and some fail outright.
+  const LANES = 3;
+  const jobs = files.map(file => {
     const uid = 'u' + Math.random().toString(36).slice(2);
-    el('upload-list').insertAdjacentHTML('beforeend', `
-      <div class="u-item">
-        <div class="u-head">
-          <span class="u-name">${x(file.name)}</span>
-          <span class="u-pct" id="${uid}-p">0%</span>
+    el('up-list').insertAdjacentHTML('beforeend', `
+      <div>
+        <div class="up-h">
+          <span class="up-n">${x(file.name)}</span>
+          <span class="up-p" id="${uid}-p">${fmtSize(file.size)}</span>
         </div>
-        <div class="prog"><div class="prog-fill" id="${uid}-b" style="width:0"></div></div>
+        <div class="trk"><i id="${uid}-b" style="width:0"></i></div>
       </div>`);
+    return { file, uid };
+  });
 
-    const upload = S3.upload({
-      Bucket: bucket,
-      Key: prefix + file.name,
-      Body: file,
+  let failed = 0, next = 0;
+
+  const runOne = ({ file, uid }) => new Promise(resolve => {
+    const up = S3.upload({
+      Bucket: bucket, Key: prefix + file.name, Body: file,
       ContentType: file.type || 'application/octet-stream',
     });
 
-    upload.on('httpUploadProgress', p => {
+    up.on('httpUploadProgress', p => {
       const pct = p.total ? Math.round(p.loaded / p.total * 100) : 0;
-      const pEl = el(`${uid}-p`), bEl = el(`${uid}-b`);
-      if (pEl) pEl.textContent = pct + '%';
-      if (bEl) bEl.style.width = pct + '%';
+      const pe = el(`${uid}-p`), be = el(`${uid}-b`);
+      if (pe) pe.textContent = pct + '%';
+      if (be) be.style.width = pct + '%';
     });
 
-    upload.promise()
+    up.promise()
       .then(() => {
-        const bEl = el(`${uid}-b`), pEl = el(`${uid}-p`);
-        if (bEl) { bEl.style.width = '100%'; bEl.classList.add('done'); }
-        if (pEl) pEl.textContent = '✓';
+        const be = el(`${uid}-b`), pe = el(`${uid}-p`);
+        if (be) { be.style.width = '100%'; be.classList.add('ok'); }
+        if (pe) pe.textContent = 'done';
       })
-      .catch(() => {
-        const bEl = el(`${uid}-b`), pEl = el(`${uid}-p`);
-        if (bEl) bEl.classList.add('fail');
-        if (pEl) pEl.textContent = '✗';
+      .catch(err => {
+        failed++;
+        const be = el(`${uid}-b`), pe = el(`${uid}-p`);
+        if (be) { be.style.width = '100%'; be.classList.add('no'); }
+        if (pe) { pe.textContent = 'failed'; pe.style.color = 'var(--red)'; pe.title = err.message || ''; }
       })
       .finally(resolve);
-  })));
-
-  el('btn-upload-close').disabled = false;
-  toast(`${files.length} file${files.length !== 1 ? 's' : ''} uploaded`, 'ok');
-}
-
-// ─────────────────────────────────────────────
-//  DOWNLOAD
-// ─────────────────────────────────────────────
-function downloadItem(item) {
-  const url = S3.getSignedUrl('getObject', {
-    Bucket: bucket, Key: item.key, Expires: 60,
-    ResponseContentDisposition: `attachment; filename="${encodeURIComponent(item.name)}"`,
   });
-  Object.assign(document.createElement('a'), { href: url, download: item.name, target: '_blank' }).click();
-  toast('Download started', 'ok');
+
+  await Promise.all(Array.from({ length: Math.min(LANES, jobs.length) }, async () => {
+    while (next < jobs.length) await runOne(jobs[next++]);
+  }));
+
+  el('up-done').disabled = false;
+  const ok = files.length - failed;
+  el('m-upload-t').textContent = failed ? `Uploaded ${ok} of ${files.length}` : 'Upload complete';
+  if (failed) toast(`${failed} of ${files.length} failed to upload`, 'err');
+  else toast(`Uploaded ${ok} file${ok === 1 ? '' : 's'}`, 'ok');
 }
 
-// ─────────────────────────────────────────────
-//  DELETE
-// ─────────────────────────────────────────────
-function askDelete(keys) {
-  pendingDelKeys = keys;
-  const msgEl = el('md-del-msg');
-  if (keys.length === 1) {
-    const item = items.find(i => i.key === keys[0]) || { name: keys[0], type: 'file' };
-    const isDir = item.type === 'folder';
-    msgEl.innerHTML = `
-      <p>Delete <strong style="font-family:var(--mo);color:var(--err)">${x(item.name)}${isDir ? '/' : ''}</strong>?</p>
-      ${isDir ? `<p style="font-size:12px;color:var(--txt2);margin-top:8px">Only the folder placeholder is deleted. Objects inside must be removed separately.</p>` : ''}
-      <p style="font-size:12px;color:var(--txt3);margin-top:8px">This action cannot be undone.</p>`;
-  } else {
-    msgEl.innerHTML = `<p>Delete <strong>${keys.length}</strong> items?</p><p style="font-size:12px;color:var(--txt3);margin-top:8px">This action cannot be undone.</p>`;
+function setupDrop() {
+  let depth = 0;
+  const show = on => {
+    el('drop').classList.toggle('on', on);
+    el('drop-p').textContent = on ? `s3://${bucket}/${prefix}` : '';
+  };
+  window.addEventListener('dragenter', e => {
+    if (!S3 || !e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+    e.preventDefault(); depth++; show(true);
+  });
+  window.addEventListener('dragover', e => { if (S3) e.preventDefault(); });
+  window.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; show(false); } });
+  window.addEventListener('drop', e => {
+    if (!S3) return;
+    e.preventDefault(); depth = 0; show(false);
+    const fs = [...(e.dataTransfer.files || [])];
+    if (fs.length) doUpload(fs);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DOWNLOAD / SHARE
+   ═══════════════════════════════════════════════════════════════════ */
+function signed(key, secs, filename) {
+  const p = { Bucket: bucket, Key: key, Expires: secs };
+  if (filename) {
+    // RFC 6266: a plain ASCII fallback plus a UTF-8 form, so accented or
+    // non-Latin filenames survive instead of being mangled or dropped.
+    const ascii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '');
+    p.ResponseContentDisposition =
+      `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
   }
-  openModal('md-del');
+  return S3.getSignedUrl('getObject', p);
+}
+function thumbURL(key) {
+  try { return signed(key, 900); } catch { return null; }
+}
+function isImage(name) {
+  return IMG.has((name.split('.').pop() || '').toLowerCase());
 }
 
-function deleteSelected() {
-  if (selKeys.size) askDelete([...selKeys]);
+function downloadItem(item) {
+  if (!S3 || item.type === 'folder') return;
+  Object.assign(document.createElement('a'), {
+    href: signed(item.key, 60, item.name), download: item.name, target: '_blank',
+  }).click();
+  toast(`Downloading ${item.name}`, 'ok');
 }
 
-async function confirmDelete() {
-  closeModal('md-del');
-  try {
-    if (pendingDelKeys.length === 1) {
-      await s3api('deleteObject', { Bucket: bucket, Key: pendingDelKeys[0] });
-    } else {
-      await s3api('deleteObjects', {
-        Bucket: bucket,
-        Delete: { Objects: pendingDelKeys.map(k => ({ Key: k })), Quiet: true }
-      });
-    }
-    selKeys.clear();
-    pendingDelKeys = [];
-    toast('Deleted successfully', 'ok');
-    await load();
-  } catch (err) {
-    toast('Delete failed: ' + err.message, 'err');
+async function downloadSelected() {
+  const files = [...selKeys].map(k => items.find(i => i.key === k)).filter(i => i && i.type === 'file');
+  if (!files.length) return toast('No files selected — prefixes cannot be downloaded', 'err');
+  if (files.length > 8) toast(`Starting ${files.length} downloads — your browser may ask to allow them`, 'inf');
+  for (const f of files) {
+    downloadItem(f);
+    await new Promise(r => setTimeout(r, 350));   // browsers drop bursts
   }
 }
 
-// ─────────────────────────────────────────────
-//  CREATE FOLDER
-// ─────────────────────────────────────────────
-function showMkdir() {
-  el('mkdir-name').value = '';
-  openModal('md-mkdir');
-  setTimeout(() => el('mkdir-name').focus(), 60);
-}
-
-async function doMkdir() {
-  const name = el('mkdir-name').value.trim().replace(/\/+$/, '');
-  if (!name) return;
-  const key = prefix + name + '/';
-  try {
-    await s3api('putObject', { Bucket: bucket, Key: key, Body: '', ContentType: 'application/x-directory' });
-    closeModal('md-mkdir');
-    toast(`Folder "${name}" created`, 'ok');
-    await load();
-  } catch (err) {
-    toast('Failed: ' + err.message, 'err');
-  }
-}
-
-// ─────────────────────────────────────────────
-//  SHARE / PRESIGNED URL
-// ─────────────────────────────────────────────
 function showShare(item) {
   shareKey = item.key;
-  el('share-s3uri').textContent = `s3://${bucket}/${item.key}`;
-  openModal('md-share');
+  el('share-uri').textContent = `s3://${bucket}/${item.key}`;
+  showModal('m-share');
   genPresign();
 }
-
 function genPresign() {
   if (!S3 || !shareKey) return;
-  const exp = parseInt(el('share-expiry').value);
-  const url = S3.getSignedUrl('getObject', { Bucket: bucket, Key: shareKey, Expires: exp });
-  el('share-url').value = url;
+  el('share-url').value = signed(shareKey, parseInt(el('share-exp').value, 10));
 }
-
 function copyPresign() {
   const url = el('share-url').value;
   if (!url) return;
-  navigator.clipboard.writeText(url)
-    .then(() => toast('URL copied to clipboard!', 'ok'))
-    .catch(() => { el('share-url').select(); document.execCommand('copy'); toast('URL copied!', 'ok'); });
+  const done = () => toast('Link copied', 'ok');
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(done).catch(fallback);
+  else fallback();
+  function fallback() {
+    el('share-url').select();
+    try { document.execCommand('copy'); done(); }
+    catch { toast('Could not copy — select the link and copy manually', 'err'); }
+  }
 }
 
-// ─────────────────────────────────────────────
-//  DRAG & DROP
-// ─────────────────────────────────────────────
-function setupDrop() {
-  const overlay = el('drop-overlay');
-  let n = 0;
-  document.addEventListener('dragenter', e => { e.preventDefault(); n++; if (S3) overlay.classList.add('on'); });
-  document.addEventListener('dragleave', () => { if (--n <= 0) { n = 0; overlay.classList.remove('on'); } });
-  document.addEventListener('dragover', e => e.preventDefault());
-  document.addEventListener('drop', e => {
-    e.preventDefault(); n = 0; overlay.classList.remove('on');
-    if (!S3) return;
-    const files = [...e.dataTransfer.files].filter(f => f.size > 0);
-    if (files.length) doUpload(files);
+/* ═══════════════════════════════════════════════════════════════════
+   DELETE
+   ═══════════════════════════════════════════════════════════════════ */
+function askDelete(keys) {
+  pendingDelKeys = keys;
+  const box = el('m-del-b');
+  if (keys.length === 1) {
+    const it = items.find(i => i.key === keys[0]) || { name: keys[0], type: 'file' };
+    const dir = it.type === 'folder';
+    el('m-del-t').textContent = dir ? 'Delete folder marker' : 'Delete object';
+    box.innerHTML = `
+      <div class="card" style="margin-bottom:0">
+        <svg class="ic"><use href="#${glyph(it).s}"/></svg>
+        <div class="card-b"><div class="card-t">${x(it.name)}${dir ? '/' : ''}</div>
+        <div class="card-s">s3://${x(bucket)}/${x(prefix)}</div></div>
+      </div>
+      ${dir ? `<div class="warn" style="margin-top:12px"><svg class="ic ic-sm"><use href="#i-alert"/></svg>
+        <div>This removes only the empty marker object. Anything stored under the prefix stays where it is.</div></div>` : ''}
+      <p class="hint" style="margin-top:12px">This cannot be undone.</p>`;
+  } else {
+    el('m-del-t').textContent = `Delete ${keys.length} items`;
+    const dirs = keys.filter(k => k.endsWith('/')).length;
+    box.innerHTML = `
+      <p style="font-size:13px">Delete <b class="mo">${keys.length}</b> items from
+        <span class="mo" style="color:var(--ink2)">s3://${x(bucket)}/${x(prefix)}</span>?</p>
+      ${dirs ? `<div class="warn" style="margin-top:12px"><svg class="ic ic-sm"><use href="#i-alert"/></svg>
+        <div>${dirs} of these are folder markers. Objects stored under those prefixes stay where they are.</div></div>` : ''}
+      <p class="hint" style="margin-top:12px">This cannot be undone.</p>`;
+  }
+  showModal('m-del');
+}
+
+function deleteSelected() { if (selKeys.size) askDelete([...selKeys]); }
+
+async function confirmDelete() {
+  hideModal('m-del');
+  const n = pendingDelKeys.length;
+  try {
+    if (n === 1) await s3api('deleteObject', { Bucket: bucket, Key: pendingDelKeys[0] });
+    else await s3api('deleteObjects', {
+      Bucket: bucket, Delete: { Objects: pendingDelKeys.map(k => ({ Key: k })), Quiet: true },
+    });
+    selKeys.clear();
+    pendingDelKeys = [];
+    toast(`Deleted ${n} item${n === 1 ? '' : 's'}`, 'ok');
+    await load();
+  } catch (err) {
+    toast('Delete failed: ' + (err.message || 'unknown error'), 'err');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NEW FOLDER
+   ═══════════════════════════════════════════════════════════════════ */
+function showMkdir() {
+  if (!S3) return;
+  el('mkdir-name').value = '';
+  mkdirPrev();
+  showModal('m-mkdir');
+  setTimeout(() => el('mkdir-name').focus(), 60);
+}
+function mkdirPrev() {
+  const n = el('mkdir-name').value.trim().replace(/^\/+|\/+$/g, '');
+  el('mkdir-prev').textContent = `s3://${bucket}/${prefix}${n || '…'}/`;
+}
+async function doMkdir() {
+  const name = el('mkdir-name').value.trim().replace(/^\/+|\/+$/g, '');
+  if (!name) return;
+  try {
+    await s3api('putObject', {
+      Bucket: bucket, Key: prefix + name + '/', Body: '',
+      ContentType: 'application/x-directory',
+    });
+    hideModal('m-mkdir');
+    toast(`Created ${name}/`, 'ok');
+    await load();
+  } catch (err) {
+    toast('Could not create folder: ' + (err.message || 'unknown error'), 'err');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ENCRYPTED CREDENTIAL FILES
+
+   Credentials are never persisted in the browser. They live in
+   sessionStorage for this tab only, and the single durable copy is a
+   .s3vault file you save deliberately and keep wherever you choose.
+
+   File layout (all binary fields base64):
+     { app, v, kdf:{name,hash,iters,salt}, cipher, iv, ct, created, updated }
+
+   `ct` is AES-256-GCM over the UTF-8 JSON of { connections, activeConnId }.
+   The KDF header is passed as GCM additionalData, so the authentication tag
+   covers it too: someone who edits the stored salt or lowers the iteration
+   count gets a decryption failure rather than a quietly weakened key
+   derivation. Every save uses a fresh random salt and a fresh random IV.
+
+   The passphrase is never stored, and the derived key is a non-extractable
+   CryptoKey that is dropped as soon as the operation finishes.
+
+   This page never reads or writes localStorage. Nothing at all persists in
+   the browser profile.
+
+   THREAT MODEL — what this does and does not buy you:
+     ✔ Nothing survives in the browser profile, so a stolen or synced
+       profile, or a localStorage dump, yields no credentials at all.
+     ✔ The file is unreadable without its passphrase, so it is safe to back
+       up or carry between machines.
+     ✘ Does NOT protect against code running in this page. While you are
+       connected, the plaintext keys are in memory, so any XSS, malicious
+       browser extension, or tampered CDN script (this page loads the AWS
+       SDK from sdk.amazonaws.com) can read them.
+     ✘ A leaked file cannot be revoked. If one goes missing, rotate the S3
+       keys themselves — changing the passphrase does not help, because the
+       old file still opens with the old one.
+   Prefer credentials scoped to one bucket with the minimum actions.
+   ═══════════════════════════════════════════════════════════════════ */
+const VAULT_VER = 1;
+const KDF_ITERS = 310000;   // PBKDF2-HMAC-SHA256; OWASP 2023 floor
+const MIN_PASS  = 10;
+const MAX_FILE  = 4 * 1024 * 1024;
+
+const TE = new TextEncoder(), TD = new TextDecoder();
+
+// crypto.subtle only exists in a secure context (HTTPS or localhost). On a
+// plain-http origin encryption cannot work at all, so say so plainly rather
+// than failing halfway through.
+function cryptoOK() {
+  return typeof crypto !== 'undefined' && !!crypto.subtle && !!crypto.getRandomValues;
+}
+
+function toB64(buf) {
+  const u = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+  return btoa(s);
+}
+function fromB64(str) {
+  const r = atob(str), u = new Uint8Array(r.length);
+  for (let i = 0; i < r.length; i++) u[i] = r.charCodeAt(i);
+  return u;
+}
+function randBytes(n) { return crypto.getRandomValues(new Uint8Array(n)); }
+
+// The KDF header, canonicalised for use as GCM additionalData.
+function hdrAAD(h) { return TE.encode(`s3b|v${h.v}|${h.hash}|${h.iters}|${h.salt}`); }
+function recHdr(r) { return { v: r.v, hash: r.kdf.hash, iters: r.kdf.iters, salt: r.kdf.salt }; }
+function newHdr()  { return { v: VAULT_VER, hash: 'SHA-256', iters: KDF_ITERS, salt: toB64(randBytes(16)) }; }
+
+async function deriveKeyFrom(pass, hdr) {
+  // NFKC so the same typed passphrase derives the same key across platforms
+  // and input methods.
+  const material = await crypto.subtle.importKey(
+    'raw', TE.encode(pass.normalize('NFKC')), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: fromB64(hdr.salt), iterations: hdr.iters, hash: hdr.hash },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,                       // non-extractable
+    ['encrypt', 'decrypt']);
+}
+
+async function sealRecord(key, hdr, payload) {
+  const iv = randBytes(12);      // fresh IV on every write — never reused
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: hdrAAD(hdr), tagLength: 128 },
+    key, TE.encode(JSON.stringify(payload)));
+  const now = new Date().toISOString();
+  return {
+    app: 's3exp-credentials', v: hdr.v,
+    kdf: { name: 'PBKDF2', hash: hdr.hash, iters: hdr.iters, salt: hdr.salt },
+    cipher: 'AES-256-GCM', iv: toB64(iv), ct: toB64(ct),
+    created: now, updated: now,
+  };
+}
+
+// Throws if the passphrase is wrong or anything was tampered with.
+async function openRecord(pass, rec) {
+  const key = await deriveKeyFrom(pass, recHdr(rec));
+  const pt = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: fromB64(rec.iv), additionalData: hdrAAD(recHdr(rec)), tagLength: 128 },
+    key, fromB64(rec.ct));
+  return JSON.parse(TD.decode(pt));
+}
+
+function validRecord(r) {
+  return !!r && r.v === VAULT_VER && r.kdf && r.kdf.name === 'PBKDF2'
+    && ['SHA-256', 'SHA-512'].includes(r.kdf.hash)
+    && Number.isInteger(r.kdf.iters) && r.kdf.iters >= 100000 && r.kdf.iters <= 5000000
+    && typeof r.kdf.salt === 'string' && typeof r.iv === 'string' && typeof r.ct === 'string';
+}
+
+// Only accept connection objects of the expected shape.
+function cleanConn(c) {
+  if (!c || typeof c !== 'object') return null;
+  const s = v => typeof v === 'string' ? v : '';
+  if (!s(c.key) || !s(c.sec) || !s(c.bkt)) return null;
+  return { id: s(c.id) || mkuid(), label: s(c.label) || s(c.bkt), key: s(c.key),
+           sec: s(c.sec), reg: s(c.reg) || 'us-east-1', bkt: s(c.bkt), ep: s(c.ep) };
+}
+
+/* ── Session storage (tab-scoped, cleared on close) ───────────────── */
+function loadCreds() {
+  try { return JSON.parse(sessionStorage.getItem('s3b')) || {}; } catch { return {}; }
+}
+function saveCreds() {
+  try { sessionStorage.setItem('s3b', JSON.stringify({ connections, activeConnId })); } catch { /* private mode */ }
+}
+
+function restoreSession() {
+  const c = loadCreds();
+  if (c.connections && Array.isArray(c.connections)) {
+    connections = c.connections.map(cleanConn).filter(Boolean);
+    renderConns();
+    if (c.activeConnId && connections.some(k => k.id === c.activeConnId)) connectById(c.activeConnId, true);
+  } else if (c.key) {
+    const conn = cleanConn({ id: mkuid(), label: c.bkt, key: c.key, sec: c.sec, reg: c.reg, bkt: c.bkt, ep: c.ep });
+    connections = conn ? [conn] : [];
+    renderConns();
+    if (conn) connectById(conn.id, true);
+  } else {
+    renderConns();
+  }
+}
+
+function clearSession() {
+  sessionStorage.removeItem('s3b');
+  connections = []; activeConnId = null;
+  disconnect();
+  renderStorageUI();
+  toast('Session cleared', 'inf');
+}
+
+/* ── Save to file ─────────────────────────────────────────────────── */
+function promptSaveFile() {
+  if (!cryptoOK()) { toast('Encryption needs HTTPS or localhost', 'err'); return; }
+  if (!connections.length) { toast('Add a connection first', 'err'); return; }
+  hideErr('fx-err');
+  el('fx-p1').value = ''; el('fx-p2').value = '';
+  const n = connections.length;
+  el('fx-count').textContent = `${n} connection${n === 1 ? '' : 's'} · ${connections.map(c => c.label || c.bkt).join(', ')}`;
+  scorePw('fx-p1', 'fx-meter', 'fx-lbl');
+  showModal('m-file-save');
+  setTimeout(() => el('fx-p1').focus(), 60);
+}
+
+async function saveToFile() {
+  const p1 = el('fx-p1').value, p2 = el('fx-p2').value;
+  hideErr('fx-err');
+  if (p1.length < MIN_PASS) return showErr('fx-err', `Use at least ${MIN_PASS} characters`);
+  if (p1 !== p2)            return showErr('fx-err', 'The two passphrases do not match');
+  if (!connections.length)  return showErr('fx-err', 'Nothing to save');
+
+  setBusy('fx-btn', true, 'Encrypting…');
+  try {
+    const hdr = newHdr();
+    const key = await deriveKeyFrom(p1, hdr);
+    const rec = await sealRecord(key, hdr, { connections, activeConnId });
+    downloadJSON(rec, `s3exp-credentials-${new Date().toISOString().slice(0, 10)}.s3vault`);
+    el('fx-p1').value = ''; el('fx-p2').value = '';
+    scorePw('fx-p1', 'fx-meter', 'fx-lbl');
+    hideModal('m-file-save');
+    const n = connections.length;
+    toast(`Saved ${n} connection${n === 1 ? '' : 's'} to an encrypted file`, 'ok');
+  } catch (e) {
+    showErr('fx-err', 'Could not encrypt: ' + e.message);
+  } finally {
+    setBusy('fx-btn', false, 'Encrypt and download', 'i-save');
+  }
+}
+
+function downloadJSON(obj, filename) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ── Load from file ───────────────────────────────────────────────── */
+function promptLoadFile() {
+  if (!cryptoOK()) { toast('Decryption needs HTTPS or localhost', 'err'); return; }
+  el('cred-file').click();
+}
+
+function onCredFilePicked() {
+  const inp = el('cred-file');
+  const file = inp.files && inp.files[0];
+  if (!file) return;
+  if (file.size > MAX_FILE) {
+    toast('Too large to be a credential file', 'err');
+    inp.value = '';
+    return;
+  }
+  const rd = new FileReader();
+  rd.onload = () => {
+    inp.value = '';                       // let the same file be picked again
+    let rec = null;
+    try { rec = JSON.parse(rd.result); } catch { /* not JSON */ }
+    if (!validRecord(rec)) {
+      toast('That is not an encrypted credential file', 'err');
+      return;
+    }
+    pendingFile = { rec, name: file.name };
+    hideErr('fm-err');
+    el('fm-pass').value = '';
+    el('fm-name').textContent = file.name;
+    const when = rec.updated ? new Date(rec.updated) : null;
+    el('fm-info').textContent =
+      `${rec.cipher || 'AES-256-GCM'} · ${rec.kdf.hash} ${rec.kdf.iters.toLocaleString()} iterations`
+      + (when && !isNaN(when) ? ` · saved ${when.toLocaleDateString()}` : '');
+    el('fm-mode-wrap').classList.toggle('hidden', connections.length === 0);
+    setLoadMode('merge');
+    showModal('m-file-load');
+    setTimeout(() => el('fm-pass').focus(), 60);
+  };
+  rd.onerror = () => { toast('Could not read that file', 'err'); inp.value = ''; };
+  rd.readAsText(file);
+}
+
+function setLoadMode(m) {
+  loadMode = m;
+  el('fm-opt-merge').classList.toggle('on', m === 'merge');
+  el('fm-opt-replace').classList.toggle('on', m === 'replace');
+}
+
+function cancelFileLoad() {
+  pendingFile = null;
+  el('fm-pass').value = '';
+  hideModal('m-file-load');
+}
+
+async function loadFromFile() {
+  if (!pendingFile) return hideModal('m-file-load');
+  const pass = el('fm-pass').value;
+  if (!pass) return showErr('fm-err', 'Enter the passphrase for this file');
+  hideErr('fm-err');
+  setBusy('fm-btn', true, 'Decrypting…');
+  try {
+    const payload = await openRecord(pass, pendingFile.rec);    // throws if wrong
+    const incoming = (Array.isArray(payload.connections) ? payload.connections : [])
+      .map(cleanConn).filter(Boolean);
+    if (!incoming.length) throw new Error('EMPTY');
+
+    const mode = connections.length ? loadMode : 'replace';
+    const res = applyLoaded(incoming, payload.activeConnId, mode);
+
+    pendingFile = null;
+    el('fm-pass').value = '';
+    hideModal('m-file-load');
+    saveCreds();
+    renderConns();
+    renderStorageUI();
+
+    toast(mode === 'replace'
+      ? `Loaded ${res.total} connection${res.total === 1 ? '' : 's'}`
+      : `Added ${res.added} connection${res.added === 1 ? '' : 's'}${res.skipped ? `, skipped ${res.skipped} already here` : ''}`,
+      'ok');
+
+    if (!S3 && connections.length) {
+      const want = activeConnId && connections.some(c => c.id === activeConnId) ? activeConnId : connections[0].id;
+      await connectById(want, true);
+    }
+  } catch (e) {
+    showErr('fm-err', e.message === 'EMPTY'
+      ? 'That file decrypted but holds no connections'
+      : 'Wrong passphrase, or the file has been altered');
+    el('fm-pass').select();
+  } finally {
+    setBusy('fm-btn', false, 'Decrypt and load', 'i-import');
+  }
+}
+
+// Merge or replace the live list. Duplicates are matched on the credential
+// content, not the id, so re-loading the same file twice is a no-op.
+function applyLoaded(incoming, wantActive, mode) {
+  const sig = c => [c.key, c.sec, c.reg, c.bkt, c.ep].join('\u0000');
+
+  if (mode === 'replace') {
+    const hadActive = activeConnId;
+    connections = incoming;
+    activeConnId = incoming.some(c => c.id === wantActive) ? wantActive : null;
+    if (hadActive && hadActive !== activeConnId) {
+      S3 = null; bucket = ''; prefix = '';
+      rawFolders = []; rawFiles = []; items = []; selKeys.clear();
+      updateChrome(); buildAddr(); showState('st-none');
+    }
+    return { total: connections.length, added: connections.length, skipped: 0 };
+  }
+
+  const have = new Set(connections.map(sig));
+  const ids  = new Set(connections.map(c => c.id));
+  let added = 0, skipped = 0;
+  for (const c of incoming) {
+    if (have.has(sig(c))) { skipped++; continue; }
+    if (ids.has(c.id)) c.id = mkuid();      // keep ids unique after a merge
+    connections.push(c);
+    ids.add(c.id); have.add(sig(c));
+    added++;
+  }
+  return { total: connections.length, added, skipped };
+}
+
+/* ── Credentials panel ────────────────────────────────────────────── */
+function renderStorageUI() {
+  const chip = el('store-chip'), note = el('store-note'), acts = el('store-actions');
+
+  if (!cryptoOK()) {
+    chip.textContent = 'Session only';
+    note.innerHTML = `<code>crypto.subtle</code> is unavailable on this origin, so encrypted files are off. `
+      + `Credentials stay in <code>sessionStorage</code> for this tab.`;
+    acts.innerHTML = `<button class="btn btn-d btn-sm btn-blk" onclick="clearSession()">
+      <svg class="ic ic-sm"><use href="#i-broom"/></svg> Clear session</button>`;
+    return;
+  }
+
+  // Saving and clearing only mean something once there is a connection, so
+  // they are dimmed rather than left to fail with a toast.
+  const none = connections.length === 0 ? ' disabled' : '';
+  chip.textContent = 'Session only';
+  note.innerHTML = `Nothing is stored in this browser. Credentials live in <code>sessionStorage</code> `
+    + `and go when the tab closes — save them to an encrypted file to keep them.`;
+  acts.innerHTML = `
+    <button class="btn btn-p btn-sm btn-blk"${none} onclick="promptSaveFile()">
+      <svg class="ic ic-sm"><use href="#i-lock"/></svg> Save encrypted to file</button>
+    <button class="btn btn-p btn-sm btn-blk" onclick="promptLoadFile()">
+      <svg class="ic ic-sm"><use href="#i-import"/></svg> Load from file</button>
+    <button class="btn btn-d btn-sm btn-blk"${none} onclick="clearSession()">
+      <svg class="ic ic-sm"><use href="#i-broom"/></svg> Clear session</button>`;
+}
+
+/* ── Passphrase helpers ───────────────────────────────────────────── */
+function togglePw(id, btn) {
+  const i = el(id);
+  i.type = i.type === 'password' ? 'text' : 'password';
+  btn.innerHTML = `<svg class="ic ic-sm"><use href="#${i.type === 'password' ? 'i-eye' : 'i-eye-off'}"/></svg>`;
+}
+
+// Rough entropy estimate — a heuristic for feedback, not a guarantee.
+// A long passphrase of ordinary words beats a short cryptic one.
+function pwBits(p) {
+  if (!p) return 0;
+  let pool = 0;
+  if (/[a-z]/.test(p))        pool += 26;
+  if (/[A-Z]/.test(p))        pool += 26;
+  if (/[0-9]/.test(p))        pool += 10;
+  if (/[^A-Za-z0-9]/.test(p)) pool += 33;
+  const uniq = new Set(p).size;
+  const variety = Math.min(1, uniq / Math.max(8, p.length * 0.55));
+  return Math.round(p.length * Math.log2(pool || 2) * variety);
+}
+
+function scorePw(inputId, meterId, lblId) {
+  const p = el(inputId).value, bits = pwBits(p);
+  const bands = [
+    { max: 45,       n: 1, c: 'var(--red)',   t: 'Weak' },
+    { max: 65,       n: 2, c: 'var(--amber)', t: 'Fair' },
+    { max: 90,       n: 3, c: 'var(--cyan)',  t: 'Good' },
+    { max: Infinity, n: 4, c: 'var(--green)', t: 'Strong' },
+  ];
+  const b = p ? bands.find(band => bits < band.max) : { n: 0, c: '', t: '' };
+  el(meterId).querySelectorAll('i').forEach((bar, i) => {
+    bar.style.background = i < b.n ? b.c : 'var(--s3)';
   });
+  const lbl = el(lblId);
+  if (!p) {
+    lbl.textContent = `At least ${MIN_PASS} characters. A few unrelated words works well.`;
+    lbl.style.color = 'var(--ink3)';
+    return;
+  }
+  lbl.textContent = `${b.t} · about ${bits} bits`
+    + (p.length < MIN_PASS ? ` · ${MIN_PASS - p.length} more to go` : '');
+  lbl.style.color = b.c;
 }
 
-// ─────────────────────────────────────────────
-//  MODALS
-// ─────────────────────────────────────────────
-function openModal(id)  { el(id).classList.add('open'); }
-function closeModal(id) { el(id).classList.remove('open'); }
-function showHelp() { openModal('md-help'); }
+/* ═══════════════════════════════════════════════════════════════════
+   MODALS, TOASTS, UTILITIES
+   ═══════════════════════════════════════════════════════════════════ */
+function showModal(id) {
+  lastFocus = document.activeElement;
+  el(id).classList.add('on');
+  const f = el(id).querySelector('input:not([type=hidden]),select,textarea,button');
+  if (f) setTimeout(() => f.focus(), 20);
+}
+function hideModal(id) {
+  el(id).classList.remove('on');
+  if (lastFocus && lastFocus.focus && document.contains(lastFocus)) lastFocus.focus();
+}
+function toggleSide() { el('side').classList.toggle('on'); }
 
-// ─────────────────────────────────────────────
-//  TOASTS
-// ─────────────────────────────────────────────
+function showErr(id, msg) {
+  const e = el(id);
+  e.querySelector('span').textContent = msg;
+  e.classList.remove('hidden');
+}
+function hideErr(id) { el(id).classList.add('hidden'); }
+
+function setBusy(id, on, label, icon) {
+  const b = el(id);
+  b.disabled = on;
+  b.innerHTML = on
+    ? `<svg class="ic ic-sm" style="animation:spin .7s linear infinite"><use href="#i-refresh"/></svg> ${x(label)}`
+    : `${icon ? `<svg class="ic ic-sm"><use href="#${icon}"/></svg> ` : ''}${x(label)}`;
+}
+
+const TOAST_IC = { ok: 'i-check', err: 'i-alert', inf: 'i-info' };
 function toast(msg, type = 'inf') {
   const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.innerHTML = `<span>${{ok:'✓', err:'✗', inf:'ℹ'}[type]||'ℹ'}</span> ${x(msg)}`;
-  el('toast-wrap').appendChild(t);
+  t.className = 'toast ' + type;
+  t.innerHTML = `<svg class="ic ic-sm"><use href="#${TOAST_IC[type] || 'i-info'}"/></svg><div>${x(msg)}</div>`;
+  el('toasts').appendChild(t);
   setTimeout(() => {
-    t.style.cssText = 'opacity:0;transition:opacity .3s';
-    setTimeout(() => t.remove(), 300);
-  }, 3000);
+    t.style.cssText = 'opacity:0;transform:translateX(10px);transition:.25s';
+    setTimeout(() => t.remove(), 260);
+  }, 3600);
 }
 
-// ─────────────────────────────────────────────
-//  UTILITIES
-// ─────────────────────────────────────────────
-const ICONS = {
-  // Images
-  jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',svg:'🖼️',webp:'🖼️',bmp:'🖼️',ico:'🖼️',avif:'🖼️',tiff:'🖼️',
-  // Video
-  mp4:'🎬',mov:'🎬',avi:'🎬',mkv:'🎬',webm:'🎬',m4v:'🎬',flv:'🎬',wmv:'🎬',ts:'🎬',
-  // Audio
-  mp3:'🎵',wav:'🎵',ogg:'🎵',m4a:'🎵',flac:'🎵',aac:'🎵',opus:'🎵',wma:'🎵',
-  // Archives
-  zip:'📦',tar:'📦',gz:'📦',bz2:'📦','7z':'📦',rar:'📦',tgz:'📦',xz:'📦',zst:'📦',
-  // Documents
-  pdf:'📑',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',ppt:'📋',pptx:'📋',odt:'📝',ods:'📊',odp:'📋',
-  // Code / web
-  js:'⚙️',mjs:'⚙️',jsx:'⚙️',tsx:'⚙️',py:'⚙️',go:'⚙️',rs:'⚙️',java:'⚙️',
-  c:'⚙️',cpp:'⚙️',h:'⚙️',hpp:'⚙️',cs:'⚙️',php:'⚙️',rb:'⚙️',swift:'⚙️',kt:'⚙️',
-  scala:'⚙️',r:'⚙️',dart:'⚙️',lua:'⚙️',ex:'⚙️',exs:'⚙️',
-  html:'🌐',htm:'🌐',css:'🎨',scss:'🎨',less:'🎨',sass:'🎨',
-  // Data
-  json:'📊',jsonl:'📊',xml:'📊',yaml:'📊',yml:'📊',csv:'📊',tsv:'📊',parquet:'📊',
-  sql:'🗄️',db:'🗄️',sqlite:'🗄️',sqlite3:'🗄️',
-  // Config / text
-  txt:'📄',md:'📄',rst:'📄',log:'📄',
-  env:'🔑',ini:'🔑',conf:'🔑',toml:'🔑',cfg:'🔑',properties:'🔑',
-  // Scripts / executables
-  sh:'🔧',bash:'🔧',zsh:'🔧',fish:'🔧',ps1:'🔧',bat:'🔧',cmd:'🔧',
-  exe:'💾',dmg:'💾',pkg:'💾',deb:'💾',rpm:'💾',apk:'💾',ipa:'💾',
-  // Fonts
-  ttf:'🔠',otf:'🔠',woff:'🔠',woff2:'🔠',
-  // Certs / keys
-  pem:'🔐',crt:'🔐',cer:'🔐',key:'🔐',p12:'🔐',pfx:'🔐',
-};
+/* Glyph per object type. Prefixes are amber because amber means "a place
+   you can go"; media is cyan; everything else is neutral, so the shape
+   carries the type instead of a rainbow of hues. */
+const KINDS = [
+  { s: 'i-img',   c: 'media', e: 'jpg jpeg png gif svg webp bmp ico avif tif tiff heic heif' },
+  { s: 'i-vid',   c: 'media', e: 'mp4 mov avi mkv webm m4v flv wmv mpg mpeg ts' },
+  { s: 'i-aud',   c: 'media', e: 'mp3 wav ogg m4a flac aac opus wma aiff' },
+  { s: 'i-zip',   c: '',      e: 'zip tar gz bz2 7z rar tgz xz zst br lz4' },
+  { s: 'i-code',  c: '',      e: 'js mjs cjs jsx ts tsx py go rs java c cpp cc h hpp cs php rb swift kt scala r dart lua ex exs sh bash zsh fish ps1 bat html htm css scss less sass vue svelte' },
+  { s: 'i-sheet', c: '',      e: 'csv tsv xls xlsx ods parquet' },
+  { s: 'i-db',    c: '',      e: 'sql db sqlite sqlite3 json jsonl ndjson xml yaml yml toml ini conf cfg avro orc' },
+  { s: 'i-key',   c: '',      e: 'pem crt cer key p12 pfx env asc gpg pub' },
+  { s: 'i-doc',   c: '',      e: 'txt md rst log pdf doc docx odt rtf ppt pptx odp epub' },
+];
+const EXT_MAP = (() => {
+  const m = new Map();
+  KINDS.forEach(k => k.e.split(' ').forEach(e => m.set(e, k)));
+  return m;
+})();
+const IMG = new Set(KINDS[0].e.split(' '));
 
-function fileIcon(item) {
-  if (item.type === 'folder') return '📁';
-  const ext = item.name.split('.').pop().toLowerCase();
-  return ICONS[ext] || '📄';
+function glyph(item) {
+  if (item.type === 'folder') return { s: 'i-dir', c: 'dir' };
+  const k = EXT_MAP.get((item.name.split('.').pop() || '').toLowerCase());
+  return k ? { s: k.s, c: k.c } : { s: 'i-file', c: '' };
 }
 
 function fmtSize(b) {
   if (b === null || b === undefined) return '—';
   if (b === 0) return '0 B';
-  const u = ['B','KB','MB','GB','TB'];
-  const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), 4);
-  return `${(b / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
+  const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), 5);
+  const v = b / 1024 ** i;
+  return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${u[i]}`;
 }
-
 function fmtDate(d) {
-  return new Date(d).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
-
+function fmtWhen(d) {
+  return new Date(d).toLocaleString();
+}
 function x(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-
-function el(id)    { return document.getElementById(id); }
-function $$(sel)   { return document.querySelectorAll(sel); }
-function g(id)     { return el(id).value.trim(); }
-function set(id,v) { el(id).value = v; }
+function el(id)  { return document.getElementById(id); }
+function g(id)   { return el(id).value.trim(); }
 
 function s3api(method, params) {
   return new Promise((res, rej) => S3[method](params, (err, data) => err ? rej(err) : res(data)));
-}
-
-function setStats(files, folders, sz) {
-  el('st-files').textContent   = files.toLocaleString();
-  el('st-folders').textContent = folders.toLocaleString();
-  el('st-size').textContent    = fmtSize(sz);
 }
 </script>
 </body>
