@@ -147,6 +147,11 @@
 
         <div class="bar-gap"></div>
 
+        <button class="ibtn" id="b-placeholders" onclick="togglePlaceholders()" disabled
+                aria-label="Toggle placeholder files" aria-pressed="true" title="Hide placeholder files  H">
+          <svg class="ic ic-sm"><use href="#i-eye-off" id="ic-placeholders"/></svg>
+        </button>
+
         <div class="vtog" role="group" aria-label="View">
           <button class="ibtn on" id="v-list" onclick="setView('list')" aria-label="List view" title="List view">
             <svg class="ic ic-sm"><use href="#i-list"/></svg>
@@ -925,6 +930,7 @@ function updateChrome() {
   el('b-mkdir').disabled = !on;
   el('b-refresh').disabled = !on;
   el('b-up').disabled = !on || !prefix;
+  el('b-placeholders').disabled = !on;
   el('seek').disabled = !on;
   updateSelUI();
   updateStatus();
@@ -1032,7 +1038,16 @@ function isPlaceholder(f) {
 
 function togglePlaceholders() {
   hidePlaceholders = !hidePlaceholders;
+  updatePlaceholderBtn();
   render();
+}
+function updatePlaceholderBtn() {
+  const b = el('b-placeholders');
+  b.classList.toggle('on', hidePlaceholders);
+  b.setAttribute('aria-pressed', String(hidePlaceholders));
+  b.title = (hidePlaceholders ? 'Show' : 'Hide') + ' placeholder files  H';
+  b.setAttribute('aria-label', b.title.replace('  H', ''));
+  el('ic-placeholders').setAttribute('href', hidePlaceholders ? '#i-eye-off' : '#i-eye');
 }
 
 function render() {
