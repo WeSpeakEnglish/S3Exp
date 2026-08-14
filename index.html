@@ -1465,8 +1465,14 @@ function isImage(name) {
 
 function downloadItem(item) {
   if (!S3 || item.type === 'folder') return;
+  // No target="_blank" here: the presigned URL already carries
+  // response-content-disposition: attachment, so a plain same-tab click
+  // triggers a save without navigating away. Using target="_blank" instead
+  // makes the browser treat each one as a popup — fine for the first click,
+  // but every subsequent one in a batch happens after an `await`, outside
+  // the original user gesture, so browsers silently block them.
   Object.assign(document.createElement('a'), {
-    href: signed(item.key, 60, item.name), download: item.name, target: '_blank',
+    href: signed(item.key, 60, item.name), download: item.name,
   }).click();
   toast(`Downloading ${item.name}`, 'ok');
 }
