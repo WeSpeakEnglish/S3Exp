@@ -235,6 +235,7 @@
       <div class="status">
         <span id="st-info">Not connected</span>
         <div class="bar-gap"></div>
+        <span class="hidden" id="st-hidden" style="color:var(--ink3)"></span>
         <span class="warn-i hidden" id="st-trunc">
           <svg class="ic ic-sm"><use href="#i-alert"/></svg> First 1,000 objects only
         </span>
@@ -567,6 +568,8 @@ let selKeys = new Set();
 let cursor = -1, anchor = -1;
 let sortKey = 'name', sortDir = 'asc', filterQ = '';
 let viewMode = 'list';
+let hidePlaceholders = true;   // on by default; user can reveal per session
+let hiddenPlaceholderCount = 0;
 let pendingDelKeys = [], shareKey = '';
 let truncated = false;
 
@@ -670,6 +673,7 @@ function onKey(e) {
     case 'Delete': if (selKeys.size) deleteSelected(); break;
     case 'r': case 'R': refresh(); break;
     case 'g': case 'G': setView(viewMode === 'list' ? 'grid' : 'list'); break;
+    case 'h': case 'H': togglePlaceholders(); break;
   }
 }
 
@@ -932,16 +936,29 @@ function updateStatus() {
     el('st-info').textContent = connections.length ? 'Pick a connection to start' : 'Not connected';
     el('st-endpoint').textContent = '';
     el('st-trunc').classList.add('hidden');
+    el('st-hidden').classList.add('hidden');
     return;
   }
-  const bytes = rawFiles.reduce((s, f) => s + (f.size || 0), 0);
-  const p = rawFolders.length, o = rawFiles.length;
+  const visibleFiles = hidePlaceholders ? rawFiles.filter(f => !isPlaceholder(f)) : rawFiles;
+  const bytes = visibleFiles.reduce((s, f) => s + (f.size || 0), 0);
+  const p = rawFolders.length, o = visibleFiles.length;
   el('st-info').innerHTML =
     `<b>${p}</b> ${p === 1 ? 'prefix' : 'prefixes'} · <b>${o}</b> ${o === 1 ? 'object' : 'objects'} · <b>${fmtSize(bytes)}</b>`;
   let right = conn ? (conn.reg || 'us-east-1') : '';
   if (conn && conn.ep) { try { right = new URL(conn.ep).hostname; } catch { /* fall back to region */ } }
   el('st-endpoint').textContent = right;
   el('st-trunc').classList.toggle('hidden', !truncated);
+  const sh = el('st-hidden');
+  if (hiddenPlaceholderCount) {
+    sh.innerHTML = `${hiddenPlaceholderCount} placeholder${hiddenPlaceholderCount === 1 ? '' : 's'} hidden · `
+      + `<a href="#" class="lnk" onclick="togglePlaceholders();return false;">show</a>`;
+    sh.classList.remove('hidden');
+  } else if (!hidePlaceholders && rawFiles.some(isPlaceholder)) {
+    sh.innerHTML = `<a href="#" class="lnk" onclick="togglePlaceholders();return false;">hide placeholders</a>`;
+    sh.classList.remove('hidden');
+  } else {
+    sh.classList.add('hidden');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -999,10 +1016,32 @@ async function refresh() {
   await load();
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   PLACEHOLDER OBJECTS
+   Zero-byte "keep this empty folder visible" files that other S3 tools
+   drop into a prefix — not real content, just marker noise. Hidden by
+   default; the status bar shows a count and a link to reveal them.
+   ═══════════════════════════════════════════════════════════════════ */
+const PLACEHOLDER_NAMES = new Set([
+  '.file_placeholder', '.keep', '.gitkeep', '.s3keep', '.bzempty',
+  '.placeholder', '.dir', '.emptyfolderplaceholder',
+]);
+function isPlaceholder(f) {
+  return f.type === 'file' && !f.size && PLACEHOLDER_NAMES.has(f.name.toLowerCase());
+}
+
+function togglePlaceholders() {
+  hidePlaceholders = !hidePlaceholders;
+  render();
+}
+
 function render() {
   const q = filterQ.toLowerCase();
+  hiddenPlaceholderCount = hidePlaceholders ? rawFiles.filter(isPlaceholder).length : 0;
   const ff = rawFolders.filter(f => !q || f.name.toLowerCase().includes(q));
-  const ft = rawFiles.filter(f => !q || f.name.toLowerCase().includes(q));
+  const ft = rawFiles
+    .filter(f => !(hidePlaceholders && isPlaceholder(f)))
+    .filter(f => !q || f.name.toLowerCase().includes(q));
 
   ft.sort((a, b) => {
     let d = 0;
@@ -1019,7 +1058,17 @@ function render() {
   items = [...ff, ...ft];
 
   if (!items.length) {
-    if (rawFolders.length + rawFiles.length) {
+    const totalRaw = rawFolders.length + rawFiles.length;
+    const onlyHiddenPlaceholders = totalRaw > 0 && totalRaw === hiddenPlaceholderCount && !q;
+    if (onlyHiddenPlaceholders) {
+      // Nothing real here — just a marker file, and it's hidden. Say so
+      // plainly rather than showing the "filter hid everything" message,
+      // since no filter is actually active.
+      el('st-empty-s').innerHTML =
+        `This prefix only contains ${hiddenPlaceholderCount === 1 ? 'a hidden placeholder file' : `${hiddenPlaceholderCount} hidden placeholder files`}. `
+        + `<a href="#" onclick="togglePlaceholders();return false;" class="lnk">Show it</a>.`;
+      showState('st-empty');
+    } else if (totalRaw) {
       showState('st-nomatch');            // the filter hid everything
     } else {
       el('st-empty-s').innerHTML = prefix
@@ -1277,6 +1326,7 @@ function paletteSources() {
     A('Refresh', 'i-refresh', refresh, 'R');
     if (prefix) A('Up one prefix', 'i-level-up', goUp, '⌫');
     A(viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view', viewMode === 'list' ? 'i-grid' : 'i-list', () => setView(viewMode === 'list' ? 'grid' : 'list'), 'G');
+    A(hidePlaceholders ? 'Show placeholder files' : 'Hide placeholder files', hidePlaceholders ? 'i-eye' : 'i-eye-off', togglePlaceholders, 'H');
     A('Edit the address bar', 'i-pencil', editAddr, '⌘L');
   }
   A('Add connection', 'i-plus', showAddConn);
