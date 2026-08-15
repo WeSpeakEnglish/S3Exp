@@ -1,4 +1,4 @@
-# S3Ex
+# S3Exp
 
 An S3 browser that runs entirely in your browser. No server, no install, no build step — two files, open one of them and start browsing.
 
