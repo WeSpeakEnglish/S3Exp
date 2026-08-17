@@ -15,7 +15,7 @@ Live: [try it now!](https://wespeakenglish.github.io/S3Exp/)
 - **Keyboard-first** — move, open, select, upload, filter and delete without touching the mouse
 - **Multi-bucket** — save several connections and switch with one click
 - **S3-compatible** — AWS S3, MinIO, Cloudflare R2, Wasabi, DigitalOcean Spaces, Backblaze B2, Storj, and any S3-compatible endpoint
-- **File operations** — upload with per-file progress, download, delete one or many
+- **File operations** — upload with per-file progress, download, delete one or many with progress you can stop
 - **List and grid views** — grid shows real image thumbnails
 - **Presigned share links** — temporary download URLs, 5 minutes to 7 days
 - **Drag and drop** — drop files anywhere on the window to upload into the current prefix
@@ -69,7 +69,7 @@ S3 has no folders. A "folder" is just a set of keys that share a prefix, and the
 | `G` | Toggle list / grid view |
 | `H` | Toggle hiding placeholder files |
 | `Delete` | Delete the selection |
-| `Escape` | Cancel a running upload, then close a dialog, then close the sidebar drawer, then leave the address bar, then clear the filter, then clear the selection |
+| `Escape` | Stop a running upload or delete, then close a dialog, then close the sidebar drawer, then leave the address bar, then clear the filter, then clear the selection |
 
 Typing shortcuts are ignored while a text field has focus. Mouse selection also supports shift-click for a range and `⌘`/`Ctrl`-click to toggle one item.
 
@@ -190,6 +190,7 @@ Enter the URL in the **Endpoint** field. Path-style requests and Signature V4 ar
 - **Two kinds of paging, deliberately worded apart.** **←** and **→** move through rows already loaded; **Fetch next 1,000 from the bucket** is a request to S3. The status bar counts everything loaded, not just what is on screen.
 - **The filter and the sort see every loaded page**, not just the drawn window, and the window is sliced after sorting — so sorting by date and reading page 1 is a real answer, and filtering for a key at position 24,999 finds it. Changing the sort or the filter returns you to page 1, because the old page number would no longer mean anything.
 - **Select all covers the drawn rows**, not the whole prefix. Deleting a *folder* is different: that enumerates every page itself, so it does not miss anything.
+- **Deleting many objects shows progress and can be stopped.** A delete of more than one object, or of any folder, opens a progress dialog with two phases: walking the prefixes to find what is there — counting up, since no total is known yet, and nothing has been deleted at that point — and then the batched deletes, which fill a bar in steps of 1,000. **Stop** takes effect at the next batch boundary; the dialog then reports how many were removed, because those are gone and cannot be brought back. A single object still deletes with just a toast.
 - **Deleting a folder deletes everything inside it.** Removing `logs/` recursively deletes every object stored under that prefix, including nested folders — the same as Cyberduck, Transmit, or the AWS Console. This can mean a lot of objects behind one confirmation, so double-check the prefix before confirming.
 - **Placeholder files are hidden by default.** Zero-byte marker files that other tools drop into a prefix to keep it visible — `.file_placeholder`, `.keep`, `.gitkeep`, `.s3keep`, `.bzEmpty`, `.placeholder`, `.dir`, `.emptyfolderplaceholder` — are hidden from the listing automatically. They still exist in the bucket; toggle them back on with the eye icon in the toolbar, the `H` key, the command palette, or the link in the status bar. Object counts and total size in the status bar reflect only what's currently visible.
 - **New folder** writes a zero-byte object whose key ends in `/`, which is how a prefix becomes visible in listings.

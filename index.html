@@ -413,6 +413,28 @@
 </div>
 
 <!-- Upload progress -->
+<!-- Deleting thousands of keys is two slow phases — walking the prefixes, then
+     the batched deletes. Both need to be visible, and the walk needs a way out. -->
+<div class="back" id="m-delp">
+  <div class="modal" style="max-width:420px" role="dialog" aria-modal="true" aria-labelledby="m-delp-t" tabindex="-1">
+    <div class="m-h">
+      <div class="m-t" id="m-delp-t">Deleting</div>
+    </div>
+    <div class="m-b">
+      <div class="up-h">
+        <span class="up-n" id="delp-stage">Preparing…</span>
+        <span class="up-p" id="delp-count"></span>
+      </div>
+      <div class="trk" id="delp-trk"><i id="delp-bar" style="width:0"></i></div>
+      <p class="hint" id="delp-note" style="margin-top:12px"></p>
+    </div>
+    <div class="m-f">
+      <button class="btn btn-s" id="delp-stop" onclick="cancelDelete()">Stop</button>
+      <button class="btn btn-p" id="delp-done" disabled onclick="hideModal('m-delp');refresh()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="back" id="m-upload">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-upload-t" tabindex="-1">
     <div class="m-h">
@@ -666,6 +688,10 @@ function onKey(e) {
       // Hiding a running upload would leave the transfers going unseen, so
       // Escape cancels them instead; a second press closes the dialog.
       if (open.id === 'm-upload' && upBusy) { cancelUpload(); return; }
+      // Same reasoning for a delete: hiding the dialog would leave batches
+      // running with nothing on screen to say so.
+      if (open.id === 'm-delp' && delBusy) { cancelDelete(); return; }
+      if (open.id === 'm-delp' && !delBusy) { hideModal('m-delp'); refresh(); return; }
       hideModal(open.id);
       return;
     }
@@ -1842,7 +1868,7 @@ function copyPresign() {
 /* ═══════════════════════════════════════════════════════════════════
    DELETE
    ═══════════════════════════════════════════════════════════════════ */
-async function listAllUnderPrefix(pfx) {
+async function listAllUnderPrefix(pfx, opts = {}) {
   const keys = [];
   let token;
   do {
@@ -1850,6 +1876,10 @@ async function listAllUnderPrefix(pfx) {
       Bucket: bucket, Prefix: pfx, MaxKeys: 1000, ContinuationToken: token,
     });
     for (const o of (data.Contents || [])) keys.push(o.Key);
+    // Reported per page, not per key: a prefix with 40,000 objects is 40 calls,
+    // and without this the dialog would sit on "Preparing…" for all of them.
+    if (opts.onCount) opts.onCount(keys.length);
+    if (opts.stop && opts.stop()) break;
     token = data.IsTruncated ? data.NextContinuationToken : undefined;
   } while (token);
   return keys;
@@ -1886,10 +1916,57 @@ function askDelete(keys) {
 
 function deleteSelected() { if (selKeys.size) askDelete([...selKeys]); }
 
+/* ── Delete progress ──────────────────────────────────────────────── */
+let delBusy = false, delAbort = false;
+
+function delpSet({ stage, count, pct, note, ind }) {
+  if (stage !== undefined) el('delp-stage').textContent = stage;
+  if (count !== undefined) el('delp-count').textContent = count;
+  if (note !== undefined) el('delp-note').textContent = note;
+  if (ind !== undefined) el('delp-trk').classList.toggle('ind', ind);
+  if (pct !== undefined) el('delp-bar').style.width = pct + '%';
+}
+
+// pct matters on a stop: the bar should sit where the work actually reached,
+// not snap to full as though it had finished.
+function delpFinish(cls, stage, note, pct = 100) {
+  el('delp-trk').classList.remove('ind');
+  el('delp-bar').className = cls;                 // '' | 'ok' | 'no' | 'off'
+  el('delp-bar').style.width = pct + '%';
+  el('delp-stage').textContent = stage;
+  el('delp-note').textContent = note;
+  el('delp-stop').disabled = true;
+  el('delp-done').disabled = false;
+  delBusy = false;
+}
+
+// Between batches, so a stop lands on a batch boundary rather than tearing one
+// in half. Whatever is already gone is gone — the dialog says so.
+function cancelDelete() {
+  if (!delBusy) return;
+  delAbort = true;
+  delpSet({ note: 'Stopping after the current batch…' });
+  el('delp-stop').disabled = true;
+}
+
 async function confirmDelete() {
   hideModal('m-del');
   const requested = pendingDelKeys;
   pendingDelKeys = [];
+  if (!requested.length) return;
+
+  // One plain object is a single call — a dialog for it would be noise.
+  const single = requested.length === 1 && !requested[0].endsWith('/');
+  if (!single) {
+    delBusy = true; delAbort = false;
+    el('delp-bar').className = '';
+    el('delp-stop').disabled = false;
+    el('delp-done').disabled = true;
+    el('m-delp-t').textContent = 'Deleting';
+    delpSet({ stage: 'Preparing…', count: '', pct: 0, note: '', ind: false });
+    showModal('m-delp');
+  }
+
   try {
     // Folders (keys ending in '/') delete recursively: expand each into every
     // key stored under that prefix, so removing a folder removes its contents
@@ -1897,29 +1974,72 @@ async function confirmDelete() {
     const dirKeys = requested.filter(k => k.endsWith('/'));
     const fileKeys = requested.filter(k => !k.endsWith('/'));
     let allKeys = [...fileKeys];
+
     if (dirKeys.length) {
-      toast(`Finding objects in ${dirKeys.length} folder${dirKeys.length === 1 ? '' : 's'}…`, 'ok');
+      // No total is knowable yet, so this phase counts up instead of filling up.
+      delpSet({
+        stage: `Finding objects in ${dirKeys.length} folder${dirKeys.length === 1 ? '' : 's'}…`,
+        ind: true, note: 'Nothing has been deleted yet.',
+      });
+      let base = allKeys.length;
       for (const d of dirKeys) {
-        const under = await listAllUnderPrefix(d);
-        allKeys.push(...(under.length ? under : [d])); // fall back to marker if truly empty
+        if (delAbort) break;
+        const under = await listAllUnderPrefix(d, {
+          stop: () => delAbort,
+          onCount: n => delpSet({ count: (base + n).toLocaleString() + ' found' }),
+        });
+        allKeys.push(...(under.length ? under : [d]));   // fall back to marker if truly empty
+        base = allKeys.length;
       }
     }
     allKeys = [...new Set(allKeys)];
 
+    if (delAbort) {
+      // Grey, not red: stopping on purpose is not a failure.
+      delpFinish('off', 'Stopped', 'Nothing was deleted.', 0);
+      return;
+    }
+
+    const total = allKeys.length;
+    let done = 0;
+    delpSet({ stage: 'Deleting…', ind: false, note: 'This cannot be undone.' });
+
     // deleteObjects accepts at most 1000 keys per call — batch it.
-    for (let i = 0; i < allKeys.length; i += 1000) {
+    for (let i = 0; i < total; i += 1000) {
+      if (delAbort) break;
       const batch = allKeys.slice(i, i + 1000);
       if (batch.length === 1) await s3api('deleteObject', { Bucket: bucket, Key: batch[0] });
       else await s3api('deleteObjects', {
         Bucket: bucket, Delete: { Objects: batch.map(k => ({ Key: k })), Quiet: true },
       });
+      done += batch.length;
+      delpSet({
+        count: `${done.toLocaleString()} of ${total.toLocaleString()}`,
+        pct: Math.round(done / total * 100),
+      });
     }
 
     selKeys.clear();
-    toast(`Deleted ${allKeys.length} object${allKeys.length === 1 ? '' : 's'}`, 'ok');
-    await load();
+
+    if (single) {
+      toast('Deleted 1 object', 'ok');
+      await load();
+      return;
+    }
+
+    if (delAbort) {
+      delpFinish('off', 'Stopped',
+        `${done.toLocaleString()} of ${total.toLocaleString()} deleted. Those are gone; the rest are untouched.`,
+        total ? Math.round(done / total * 100) : 0);
+    } else {
+      delpFinish('ok', 'Deleted',
+        `${total.toLocaleString()} object${total === 1 ? '' : 's'} removed.`);
+    }
+
   } catch (err) {
-    toast('Delete failed: ' + (err.message || 'unknown error'), 'err');
+    const msg = err.message || 'unknown error';
+    if (single) { toast('Delete failed: ' + msg, 'err'); return; }
+    delpFinish('no', 'Failed', msg + ' — anything already deleted is gone.');
   }
 }
 
