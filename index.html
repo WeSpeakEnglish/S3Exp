@@ -827,13 +827,18 @@ function renderConns() {
     return;
   }
   box.innerHTML = connections.map(c => {
-    let sub = c.bkt;
-    if (c.ep) { try { sub += ' · ' + new URL(c.ep).hostname; } catch { /* keep bucket only */ } }
-    else sub += ' · ' + (c.reg || 'us-east-1');
+    let host = c.reg || 'us-east-1';
+    if (c.ep) { try { host = new URL(c.ep).hostname; } catch { host = c.ep; } }
+    const label = c.label || c.bkt;
+    // A connection with no label falls back to the bucket name, so printing
+    // the bucket underneath would spend the row's whole width saying the same
+    // word twice — and that is what pushed the endpoint out of view.
+    const sub = label === c.bkt ? host : c.bkt + ' · ' + host;
+    const full = label === c.bkt ? host : `${c.bkt} · ${host}`;
     const on = c.id === activeConnId;
-    const name = x(c.label || c.bkt);
+    const name = x(label);
     return `<div class="conn${on ? ' on' : ''}">
-      <button class="conn-main" data-id="${x(c.id)}" title="${name} — ${x(sub)}"${on ? ' aria-current="true"' : ''}>
+      <button class="conn-main" data-id="${x(c.id)}" title="${name} — ${x(full)}"${on ? ' aria-current="true"' : ''}>
         <span class="conn-d"></span>
         <span class="conn-b">
           <span class="conn-n">${name}</span>
