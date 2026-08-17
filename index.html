@@ -593,6 +593,17 @@ let truncated = false;
 /* S3 returns a listing in pages of at most 1,000 entries. Holding the
    continuation token is what makes the rest of a large prefix reachable. */
 let nextToken = null, moreBusy = false;
+/* There is no virtual scroller here: every row is real DOM. 25,000 rows means
+   a 22 MB HTML string and a list nearly a kilometre tall, and the layout pass
+   alone runs into tens of seconds — so a sort or a keystroke in the filter
+   freezes the tab. Loading stays unbounded; only the number of rows put on
+   screen at once is capped, and the filter and sort still consider everything
+   loaded, which is what makes the cap tolerable. */
+const RENDER_CAP = 2000;
+/* Built once. String.localeCompare has to construct a collator on every call,
+   which is thousands of them in a single sort of a large prefix. */
+const NAME_COLL = new Intl.Collator(undefined, { numeric: true });
+let capHidden = 0, matchTotal = 0;
 
 let connections = [];
 let activeConnId = null;
@@ -948,7 +959,7 @@ function disconnect() {
   activeConnId = null;
   rawFolders = []; rawFiles = []; items = [];
   selKeys.clear(); cursor = -1; truncated = false;
-  nextToken = null; moreBusy = false;
+  nextToken = null; moreBusy = false; capHidden = 0; matchTotal = 0;
   updateChrome();
   buildAddr();
   showState('st-none');
@@ -1097,15 +1108,28 @@ function renderMore() {
   // a filter that found nothing here may well match on a later page.
   const relevant = !el('st-list').classList.contains('hidden')
                 || !el('st-nomatch').classList.contains('hidden');
-  if (!nextToken || !relevant) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  if ((!nextToken && !capHidden) || !relevant) {
+    box.classList.add('hidden'); box.innerHTML = ''; return;
+  }
 
   const loaded = rawFolders.length + rawFiles.length;
   box.classList.remove('hidden');
-  box.innerHTML = `
+
+  // Two different facts can want saying here: more pages exist on the server,
+  // and more rows are loaded than are being drawn. Either, or both.
+  let note;
+  if (capHidden) {
+    note = `Showing ${items.length.toLocaleString()} of ${matchTotal.toLocaleString()} `
+         + `${filterQ ? 'matching rows' : 'loaded rows'} — sort or filter to bring others into view`;
+  } else {
+    note = `${loaded.toLocaleString()} loaded${filterQ ? ' — the filter only searches these' : ''}`;
+  }
+
+  box.innerHTML = (nextToken ? `
     <button class="btn btn-s btn-sm" onclick="loadMore()"${moreBusy ? ' disabled' : ''}>
       <svg class="ic ic-sm"><use href="#i-down"/></svg> ${moreBusy ? 'Loading…' : 'Load next 1,000'}
-    </button>
-    <span class="more-n">${loaded.toLocaleString()} loaded${filterQ ? ' — the filter only searches these' : ''}</span>`;
+    </button>` : '')
+    + `<span class="more-n">${note}</span>`;
 }
 
 async function refresh() {
@@ -1155,17 +1179,24 @@ function render() {
 
   ft.sort((a, b) => {
     let d = 0;
-    if (sortKey === 'name') d = a.name.localeCompare(b.name, undefined, { numeric: true });
+    if (sortKey === 'name') d = NAME_COLL.compare(a.name, b.name);
     else if (sortKey === 'size') d = (a.size || 0) - (b.size || 0);
-    else if (sortKey === 'date') d = +new Date(a.date) - +new Date(b.date);
+    // The dates are already Date objects from the SDK; wrapping each one in a
+    // fresh Date inside the comparator allocated tens of thousands of them.
+    else if (sortKey === 'date') d = (a.date ? +a.date : 0) - (b.date ? +b.date : 0);
     return sortDir === 'asc' ? d : -d;
   });
   // Prefixes carry no size or date, so only a name sort can meaningfully
   // reverse them. Sorting by size must not shuffle the folders.
   const dirMul = sortKey === 'name' && sortDir === 'desc' ? -1 : 1;
-  ff.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) * dirMul);
+  ff.sort((a, b) => NAME_COLL.compare(a.name, b.name) * dirMul);
 
   items = [...ff, ...ft];
+  // Cap after sorting, never before: the rows shown must be the first ones in
+  // the order the reader asked for, not an arbitrary slice of the fetch order.
+  matchTotal = items.length;
+  capHidden = Math.max(0, matchTotal - RENDER_CAP);
+  if (capHidden) items = items.slice(0, RENDER_CAP);
 
   if (!items.length) {
     const totalRaw = rawFolders.length + rawFiles.length;
@@ -2153,7 +2184,7 @@ function applyLoaded(incoming, wantActive, mode) {
     if (hadActive && hadActive !== activeConnId) {
       S3 = null; bucket = ''; prefix = '';
       rawFolders = []; rawFiles = []; items = []; selKeys.clear();
-      nextToken = null; moreBusy = false; truncated = false;
+      nextToken = null; moreBusy = false; truncated = false; capHidden = 0;
       updateChrome(); buildAddr(); showState('st-none');
     }
     return { total: connections.length, added: connections.length, skipped: 0 };

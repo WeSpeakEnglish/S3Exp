@@ -20,7 +20,7 @@ Live: [try it now!](https://wespeakenglish.github.io/S3Exp/)
 - **Presigned share links** — temporary download URLs, 5 minutes to 7 days
 - **Drag and drop** — drop files anywhere on the window to upload into the current prefix
 - **Sort and filter** — by name, size or date; live filter across every page loaded for the prefix
-- **Paged listings** — prefixes larger than S3's 1,000-entry page load on demand, with a running count of what has arrived
+- **Paged listings** — prefixes larger than S3's 1,000-entry page load on demand; sorting and filtering cover every page loaded, and drawing stays capped so a 25,000-object prefix does not freeze the tab
 - **Encrypted credential files** — save your connections to a passphrase-protected `.s3vault` file and load them on any machine
 - **Nothing stored in the browser** — credentials live in `sessionStorage` for the tab; `localStorage` is never touched
 - **No build step** — plain HTML, CSS and JavaScript; nothing to compile or install
@@ -183,9 +183,10 @@ Enter the URL in the **Endpoint** field. Path-style requests and Signature V4 ar
 
 ## Limits and behaviour worth knowing
 
-- **Large prefixes arrive a page at a time.** S3 answers a listing with at most 1,000 entries, so a bigger prefix loads in pages. A **Load next 1,000** button appears at the foot of the list with a running count, and the status bar reads *Partial listing — 2,001 of more* until the last page lands. Nothing is hidden from you, but nothing is fetched behind your back either: a prefix with 40,000 objects is 40 clicks, and the list is real DOM rows rather than a virtual scroller, so many thousands of them will start to feel heavy. Narrowing the prefix is still the faster route.
-- **The filter and the sort see the loaded pages, not the whole bucket.** Both work across everything fetched so far and widen as you load more. If a filter finds nothing while pages remain, the footer stays put and says the filter only searched what has arrived — the name you are after may be on a later page.
-- **Select all covers the loaded rows**, not the entire prefix. Deleting a *folder* is different: that enumerates every page itself, so it does not miss anything.
+- **Large prefixes arrive a page at a time.** S3 answers a listing with at most 1,000 entries, so a bigger prefix loads in pages. A **Load next 1,000** button appears at the foot of the list with a running count, and the status bar reads *Partial listing — 2,001 of more* until the last page lands. Each click costs the same no matter how much is already loaded.
+- **At most 2,000 rows are drawn at once.** There is no virtual scroller here — every row is real DOM — and drawing 25,000 of them means a 22 MB HTML string and a list a kilometre tall, where the browser's layout pass alone takes tens of seconds and every sort freezes the tab. So loading is unbounded but rendering is capped: the footer tells you when it is capped (*Showing 2,000 of 25,012 loaded rows*), and the status bar always counts everything loaded, not just what is on screen.
+- **The filter and the sort see every loaded page**, not just the drawn rows, and the cap is applied after sorting — so sorting by date and reading the top 2,000 is a real answer, and filtering for a key that sits at position 24,999 finds it. Both widen as you load more pages. If a filter finds nothing while pages remain, the footer says the filter only searched what has arrived.
+- **Select all covers the drawn rows**, not the whole prefix. Deleting a *folder* is different: that enumerates every page itself, so it does not miss anything.
 - **Deleting a folder deletes everything inside it.** Removing `logs/` recursively deletes every object stored under that prefix, including nested folders — the same as Cyberduck, Transmit, or the AWS Console. This can mean a lot of objects behind one confirmation, so double-check the prefix before confirming.
 - **Placeholder files are hidden by default.** Zero-byte marker files that other tools drop into a prefix to keep it visible — `.file_placeholder`, `.keep`, `.gitkeep`, `.s3keep`, `.bzEmpty`, `.placeholder`, `.dir`, `.emptyfolderplaceholder` — are hidden from the listing automatically. They still exist in the bucket; toggle them back on with the eye icon in the toolbar, the `H` key, the command palette, or the link in the status bar. Object counts and total size in the status bar reflect only what's currently visible.
 - **New folder** writes a zero-byte object whose key ends in `/`, which is how a prefix becomes visible in listings.
