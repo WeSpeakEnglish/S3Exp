@@ -1,6 +1,8 @@
 # S3Exp
 
-An S3 browser that runs entirely in your browser. No server, no install, no build step — two files, open one of them and start browsing.
+An S3 browser that runs entirely in your browser. No server, no install, no build step — two files, open one of them and start browsing.  
+
+Live: [try it now!](https://wespeakenglish.github.io/S3Exp/) 
 
 ![S3Exp browsing a bucket](s3exp.png)
 
