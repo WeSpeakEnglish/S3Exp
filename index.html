@@ -59,7 +59,8 @@
 
   <!-- ═══ Header: brand + the s3:// address bar ═══ -->
   <header class="head">
-    <button class="ibtn side-x" onclick="toggleSide()" aria-label="Show connections"><svg class="ic"><use href="#i-menu"/></svg></button>
+    <button class="ibtn side-x" id="side-btn" onclick="toggleSide()" aria-label="Show connections"
+            aria-controls="side" aria-expanded="false"><svg class="ic"><use href="#i-menu"/></svg></button>
     <div class="brand">
       <div class="brand-m"><svg class="ic"><use href="#i-store"/></svg></div>
       <div class="brand-t">S3<span>Exp</span></div>
@@ -122,6 +123,11 @@
       </div>
 
     </aside>
+
+    <!-- On narrow screens the sidebar is a drawer floating over the listing.
+         This scrim makes that legible and gives the obvious way out: tap the
+         dimmed content. Inert and invisible at desktop widths. -->
+    <div class="side-scrim" id="side-scrim" onclick="closeSide()" aria-hidden="true"></div>
 
     <!-- ═══ Main ═══ -->
     <main class="main">
@@ -645,6 +651,7 @@ function onKey(e) {
       hideModal(open.id);
       return;
     }
+    if (sideOpen()) { closeSide(); return; }
     if (el('addr').classList.contains('edit')) { cancelAddr(); return; }
     if (filterQ) { clearSeek(); return; }
     if (selKeys.size) { clearSel(); return; }
@@ -849,6 +856,7 @@ function renderConns() {
 }
 
 async function switchBucket(id) {
+  closeSide();                        // the choice is made; reveal the listing
   if (id === activeConnId && S3) return;
   prefix = '';
   await connectById(id);
@@ -878,6 +886,7 @@ async function connectById(id, silent = false) {
 }
 
 function showAddConn() {
+  closeSide();                 // a dialog should not open on top of a drawer
   hideErr('nc-err');
   ['nc-label', 'nc-key', 'nc-sec', 'nc-bkt', 'nc-reg', 'nc-ep'].forEach(i => el(i).value = '');
   showModal('m-addconn');
@@ -1320,6 +1329,7 @@ function showState(id) {
    COMMAND PALETTE
    ═══════════════════════════════════════════════════════════════════ */
 function openPalette() {
+  closeSide();
   lastFocus = document.activeElement;
   el('pal').classList.add('on');
   el('pal-in').value = '';
@@ -2166,7 +2176,25 @@ function hideModal(id) {
   el(id).classList.remove('on');
   if (lastFocus && lastFocus.focus && document.contains(lastFocus)) lastFocus.focus();
 }
-function toggleSide() { el('side').classList.toggle('on'); }
+/* The drawer is opened from the header and has to be closable from three
+   places — the same button, the scrim, and Escape — plus it must get out of
+   the way by itself once a connection has been picked, since the whole point
+   of opening it was to reach the listing behind it. */
+function sideOpen() { return el('side').classList.contains('on'); }
+
+function openSide() {
+  el('side').classList.add('on');
+  el('side-scrim').classList.add('on');
+  el('side-btn').setAttribute('aria-expanded', 'true');
+}
+
+function closeSide() {
+  el('side').classList.remove('on');
+  el('side-scrim').classList.remove('on');
+  el('side-btn').setAttribute('aria-expanded', 'false');
+}
+
+function toggleSide() { sideOpen() ? closeSide() : openSide(); }
 
 function showErr(id, msg) {
   const e = el(id);
