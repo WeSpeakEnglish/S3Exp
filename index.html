@@ -232,6 +232,10 @@
         </div>
 
         <div class="hidden" id="st-list" role="listbox" aria-multiselectable="true" aria-label="Objects"></div>
+
+        <!-- Paging footer: S3 answers a listing in pages of at most 1,000, so
+             anything larger needs the continuation token followed. -->
+        <div class="more hidden" id="st-more" aria-live="polite"></div>
       </div>
 
       <!-- Floating selection actions -->
@@ -248,7 +252,7 @@
         <div class="bar-gap"></div>
         <span class="hidden" id="st-hidden" style="color:var(--ink3)"></span>
         <span class="warn-i hidden" id="st-trunc">
-          <svg class="ic ic-sm"><use href="#i-alert"/></svg> First 1,000 objects only
+          <svg class="ic ic-sm"><use href="#i-alert"/></svg> <span id="st-trunc-t">Partial listing</span>
         </span>
         <span id="st-endpoint"></span>
       </div>
@@ -586,6 +590,9 @@ let hidePlaceholders = true;   // on by default; user can reveal per session
 let hiddenPlaceholderCount = 0;
 let pendingDelKeys = [], shareKey = '';
 let truncated = false;
+/* S3 returns a listing in pages of at most 1,000 entries. Holding the
+   continuation token is what makes the rest of a large prefix reachable. */
+let nextToken = null, moreBusy = false;
 
 let connections = [];
 let activeConnId = null;
@@ -941,6 +948,7 @@ function disconnect() {
   activeConnId = null;
   rawFolders = []; rawFiles = []; items = [];
   selKeys.clear(); cursor = -1; truncated = false;
+  nextToken = null; moreBusy = false;
   updateChrome();
   buildAddr();
   showState('st-none');
@@ -966,6 +974,7 @@ function updateStatus() {
     el('st-endpoint').textContent = '';
     el('st-trunc').classList.add('hidden');
     el('st-hidden').classList.add('hidden');
+    el('st-more').classList.add('hidden');
     return;
   }
   const visibleFiles = hidePlaceholders ? rawFiles.filter(f => !isPlaceholder(f)) : rawFiles;
@@ -977,6 +986,11 @@ function updateStatus() {
   if (conn && conn.ep) { try { right = new URL(conn.ep).hostname; } catch { /* fall back to region */ } }
   el('st-endpoint').textContent = right;
   el('st-trunc').classList.toggle('hidden', !truncated);
+  if (truncated) {
+    el('st-trunc-t').textContent =
+      `Partial listing — ${(rawFolders.length + rawFiles.length).toLocaleString()} of more`;
+  }
+  renderMore();
   const sh = el('st-hidden');
   if (hiddenPlaceholderCount) {
     sh.innerHTML = `${hiddenPlaceholderCount} placeholder${hiddenPlaceholderCount === 1 ? '' : 's'} hidden · `
@@ -993,28 +1007,39 @@ function updateStatus() {
 /* ═══════════════════════════════════════════════════════════════════
    LIST
    ═══════════════════════════════════════════════════════════════════ */
+/* One page of a listing, folded into the current arrays. Called for the first
+   page and every page after it, so the two cannot drift apart. */
+function absorbPage(data) {
+  rawFolders.push(...(data.CommonPrefixes || []).map(cp => ({
+    type: 'folder', key: cp.Prefix,
+    name: cp.Prefix.slice(prefix.length).replace(/\/$/, ''),
+    size: null, date: null,
+  })));
+
+  rawFiles.push(...(data.Contents || [])
+    .filter(o => o.Key !== prefix)
+    .map(o => ({ type: 'file', key: o.Key, name: o.Key.slice(prefix.length), size: o.Size, date: o.LastModified })));
+
+  // A truncated page always carries the token for the next one. Treat a
+  // missing token as the end rather than looping on the same page forever.
+  nextToken = data.IsTruncated ? (data.NextContinuationToken || null) : null;
+  truncated = !!nextToken;
+}
+
 async function load() {
   if (!S3) return;
   showState('st-load');
   selKeys.clear();
   updateSelUI();
+  rawFolders = []; rawFiles = [];
+  nextToken = null; moreBusy = false;
 
   try {
     const data = await s3api('listObjectsV2', {
       Bucket: bucket, Prefix: prefix, Delimiter: '/', MaxKeys: 1000,
     });
 
-    rawFolders = (data.CommonPrefixes || []).map(cp => ({
-      type: 'folder', key: cp.Prefix,
-      name: cp.Prefix.slice(prefix.length).replace(/\/$/, ''),
-      size: null, date: null,
-    }));
-
-    rawFiles = (data.Contents || [])
-      .filter(o => o.Key !== prefix)
-      .map(o => ({ type: 'file', key: o.Key, name: o.Key.slice(prefix.length), size: o.Size, date: o.LastModified }));
-
-    truncated = !!data.IsTruncated;
+    absorbPage(data);
     render();
     buildAddr();
     updateChrome();
@@ -1034,6 +1059,53 @@ async function load() {
     showState('st-err');
     updateChrome();
   }
+}
+
+/* Fetching the next page appends rather than replaces, so the sort and the
+   filter widen to cover everything loaded so far. The scroll position is held
+   because render() rewrites the list wholesale and would otherwise throw the
+   reader back to the top of a listing they were already deep into. */
+async function loadMore() {
+  if (!S3 || !nextToken || moreBusy) return;
+  moreBusy = true;
+  renderMore();
+
+  const sc = el('scroll');
+  const keepTop = sc.scrollTop;
+
+  try {
+    const data = await s3api('listObjectsV2', {
+      Bucket: bucket, Prefix: prefix, Delimiter: '/', MaxKeys: 1000,
+      ContinuationToken: nextToken,
+    });
+    absorbPage(data);
+    moreBusy = false;
+    render();
+    sc.scrollTop = keepTop;
+  } catch (err) {
+    // A failed page leaves the token intact, so the button stays usable and
+    // nothing already listed is lost.
+    moreBusy = false;
+    renderMore();
+    toast(err.message || 'Could not load the next page', 'err');
+  }
+}
+
+function renderMore() {
+  const box = el('st-more');
+  // The footer belongs under a listing, and also under "nothing matched" —
+  // a filter that found nothing here may well match on a later page.
+  const relevant = !el('st-list').classList.contains('hidden')
+                || !el('st-nomatch').classList.contains('hidden');
+  if (!nextToken || !relevant) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+  const loaded = rawFolders.length + rawFiles.length;
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <button class="btn btn-s btn-sm" onclick="loadMore()"${moreBusy ? ' disabled' : ''}>
+      <svg class="ic ic-sm"><use href="#i-down"/></svg> ${moreBusy ? 'Loading…' : 'Load next 1,000'}
+    </button>
+    <span class="more-n">${loaded.toLocaleString()} loaded${filterQ ? ' — the filter only searches these' : ''}</span>`;
 }
 
 async function refresh() {
@@ -1318,6 +1390,9 @@ function showState(id) {
   ['st-none', 'st-load', 'st-empty', 'st-nomatch', 'st-err', 'st-list']
     .forEach(s => el(s).classList.toggle('hidden', s !== id));
   el('cols').classList.toggle('hidden', id !== 'st-list' || viewMode !== 'list');
+  // The paging footer only makes sense under a listing or a no-match notice;
+  // renderMore decides, but a loading or error state must clear it at once.
+  if (id !== 'st-list' && id !== 'st-nomatch') el('st-more').classList.add('hidden');
   if (id === 'st-load') {
     el('st-load').innerHTML = Array.from({ length: 9 }, (_, i) => `
       <div class="skel-row">
@@ -2078,6 +2153,7 @@ function applyLoaded(incoming, wantActive, mode) {
     if (hadActive && hadActive !== activeConnId) {
       S3 = null; bucket = ''; prefix = '';
       rawFolders = []; rawFiles = []; items = []; selKeys.clear();
+      nextToken = null; moreBusy = false; truncated = false;
       updateChrome(); buildAddr(); showState('st-none');
     }
     return { total: connections.length, added: connections.length, skipped: 0 };

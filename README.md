@@ -19,7 +19,8 @@ Live: [try it now!](https://wespeakenglish.github.io/S3Exp/)
 - **List and grid views** — grid shows real image thumbnails
 - **Presigned share links** — temporary download URLs, 5 minutes to 7 days
 - **Drag and drop** — drop files anywhere on the window to upload into the current prefix
-- **Sort and filter** — by name, size or date; live filter on the loaded prefix
+- **Sort and filter** — by name, size or date; live filter across every page loaded for the prefix
+- **Paged listings** — prefixes larger than S3's 1,000-entry page load on demand, with a running count of what has arrived
 - **Encrypted credential files** — save your connections to a passphrase-protected `.s3vault` file and load them on any machine
 - **Nothing stored in the browser** — credentials live in `sessionStorage` for the tab; `localStorage` is never touched
 - **No build step** — plain HTML, CSS and JavaScript; nothing to compile or install
@@ -66,9 +67,21 @@ S3 has no folders. A "folder" is just a set of keys that share a prefix, and the
 | `G` | Toggle list / grid view |
 | `H` | Toggle hiding placeholder files |
 | `Delete` | Delete the selection |
-| `Escape` | Cancel a running upload, then close a dialog, then clear the filter, then clear the selection |
+| `Escape` | Cancel a running upload, then close a dialog, then close the sidebar drawer, then leave the address bar, then clear the filter, then clear the selection |
 
 Typing shortcuts are ignored while a text field has focus. Mouse selection also supports shift-click for a range and `⌘`/`Ctrl`-click to toggle one item.
+
+---
+
+## Narrow screens
+
+Below 900px the sidebar stops being a column and becomes a drawer over the listing:
+
+- The **☰** button in the header opens it; the same button, a tap on the dimmed area beside it, or `Escape` closes it
+- Picking a connection closes it for you, since the point of opening it was to reach the listing behind it
+- Opening a dialog or the command palette closes it too, so nothing stacks on top of it
+
+The listing sheds columns as space runs out rather than squeezing them: the filter box moves to its own row and **Modified** drops below 760px, **Size** below 560px, and the endpoint leaves the status bar below 480px. Row actions and grid checkboxes are hover-revealed on a pointer device and always visible on a touch one.
 
 ---
 
@@ -145,7 +158,9 @@ Each saved connection stores:
 | Region | e.g. `us-east-1`. Leave blank for `us-east-1`. |
 | Endpoint | Optional — set it for non-AWS providers |
 
-Connections last for the browser session. Click any entry in the sidebar to switch buckets, or hover it and click **✕** to remove it. Removing the active connection falls back to the next one.
+Connections last for the browser session. Click any entry in the sidebar to switch buckets, or click **✕** to remove it — the ✕ appears on hover, and stays visible on touch devices where there is no hover to rely on. Removing the active connection falls back to the next one.
+
+Each row shows the name on top and the endpoint host (or the region) underneath. When the name is just the bucket name — the default — the bucket is not repeated below it; a name you chose yourself shows `bucket · host`. Anything too long for the row is truncated with an ellipsis, and the full text is in the row's tooltip.
 
 ---
 
@@ -168,8 +183,9 @@ Enter the URL in the **Endpoint** field. Path-style requests and Signature V4 ar
 
 ## Limits and behaviour worth knowing
 
-- **1,000 entries per prefix.** Listings are not paginated. When a prefix holds more, the status bar says so — narrow the prefix or use the filter.
-- **The filter is local.** It matches only the objects already loaded for the current prefix, not the whole bucket.
+- **Large prefixes arrive a page at a time.** S3 answers a listing with at most 1,000 entries, so a bigger prefix loads in pages. A **Load next 1,000** button appears at the foot of the list with a running count, and the status bar reads *Partial listing — 2,001 of more* until the last page lands. Nothing is hidden from you, but nothing is fetched behind your back either: a prefix with 40,000 objects is 40 clicks, and the list is real DOM rows rather than a virtual scroller, so many thousands of them will start to feel heavy. Narrowing the prefix is still the faster route.
+- **The filter and the sort see the loaded pages, not the whole bucket.** Both work across everything fetched so far and widen as you load more. If a filter finds nothing while pages remain, the footer stays put and says the filter only searched what has arrived — the name you are after may be on a later page.
+- **Select all covers the loaded rows**, not the entire prefix. Deleting a *folder* is different: that enumerates every page itself, so it does not miss anything.
 - **Deleting a folder deletes everything inside it.** Removing `logs/` recursively deletes every object stored under that prefix, including nested folders — the same as Cyberduck, Transmit, or the AWS Console. This can mean a lot of objects behind one confirmation, so double-check the prefix before confirming.
 - **Placeholder files are hidden by default.** Zero-byte marker files that other tools drop into a prefix to keep it visible — `.file_placeholder`, `.keep`, `.gitkeep`, `.s3keep`, `.bzEmpty`, `.placeholder`, `.dir`, `.emptyfolderplaceholder` — are hidden from the listing automatically. They still exist in the bucket; toggle them back on with the eye icon in the toolbar, the `H` key, the command palette, or the link in the status bar. Object counts and total size in the status bar reflect only what's currently visible.
 - **New folder** writes a zero-byte object whose key ends in `/`, which is how a prefix becomes visible in listings.
@@ -200,7 +216,7 @@ Encryption at rest is not the same as safety while running:
 - **Two remote dependencies at load time:** the AWS SDK v2 from the official AWS CDN, and the fonts from Google Fonts. The file therefore needs network access the first time it runs; it is self-contained, not offline.
 - **Type** — Space Grotesk for the interface, IBM Plex Mono for anything that came out of S3: keys, sizes, dates, regions and URIs.
 - **Icons** — an inline SVG sprite, so no emoji and no image requests.
-- **Accessibility** — visible keyboard focus, labelled controls, `aria` roles on dialogs and the object list, and `prefers-reduced-motion` respected.
+- **Accessibility** — visible keyboard focus, labelled controls, `aria` roles on dialogs and the object list, `aria-expanded` on the drawer toggle, a live region on the paging footer, and `prefers-reduced-motion` respected.
 
 ---
 
@@ -212,4 +228,4 @@ Any modern browser. The encrypted-file features need `crypto.subtle`, which brow
 
 ## License
 
-MIT — do whatever you want with it.
+MIT — do whatever you want with it. Provided as is, with no warranty; see [LICENSE](LICENSE) for the full text.
