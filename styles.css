@@ -446,6 +446,13 @@ textarea.in{height:auto;min-height:64px;padding:8px 10px;resize:vertical;line-he
   border-radius:var(--r);color:var(--amber);font-size:11.5px;line-height:1.55;
 }
 .warn .ic{margin-top:1px}
+/* An advisory rather than a blocker: nothing is broken, it is just worth
+   knowing. Amber would overstate it. */
+.warn.soft{
+  background:var(--s2);border-color:var(--line2);color:var(--ink2);
+}
+.warn.soft .ic{color:var(--ink3)}
+.warn.soft code{color:var(--ink)}
 
 /* Passphrase */
 .pw{position:relative}

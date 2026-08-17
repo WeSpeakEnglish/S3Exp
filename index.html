@@ -94,9 +94,9 @@
     <aside class="side" id="side">
 
       <div class="sect hidden" id="tls-warn">
-        <div class="warn">
+        <div class="warn" id="tls-warn-b">
           <svg class="ic ic-sm"><use href="#i-alert"/></svg>
-          <div>Serve this page over HTTPS or from localhost. Browsers withhold <code style="font-family:var(--mo)">crypto.subtle</code> on insecure origins, so encrypted files are unavailable.</div>
+          <div id="tls-warn-t"></div>
         </div>
       </div>
 
@@ -600,10 +600,13 @@ let nextToken = null, moreBusy = false;
    screen at once is capped, and the filter and sort still consider everything
    loaded, which is what makes the cap tolerable. */
 const RENDER_CAP = 2000;
+/* Which window of the sorted result is on screen. The cap bounds the DOM; this
+   is what stops the cap from also hiding rows for good. */
+let viewPage = 0, pageCount = 1, viewStart = 0;
 /* Built once. String.localeCompare has to construct a collator on every call,
    which is thousands of them in a single sort of a large prefix. */
 const NAME_COLL = new Intl.Collator(undefined, { numeric: true });
-let capHidden = 0, matchTotal = 0;
+let matchTotal = 0;
 
 let connections = [];
 let activeConnId = null;
@@ -619,10 +622,7 @@ let lastFocus = null;
    BOOT
    ═══════════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
-  const h = location.hostname;
-  if (location.protocol !== 'https:' && h !== 'localhost' && h !== '127.0.0.1') {
-    el('tls-warn').classList.remove('hidden');
-  }
+  showOriginNotice();
 
   restoreSession();
   renderStorageUI();
@@ -712,6 +712,8 @@ function onKey(e) {
     case 'Delete': if (selKeys.size) deleteSelected(); break;
     case 'r': case 'R': refresh(); break;
     case 'm': case 'M': loadMore(); break;
+    case '[': viewPageBy(-1); break;
+    case ']': viewPageBy(1); break;
     case 'g': case 'G': setView(viewMode === 'list' ? 'grid' : 'list'); break;
     case 'h': case 'H': togglePlaceholders(); break;
   }
@@ -960,7 +962,7 @@ function disconnect() {
   activeConnId = null;
   rawFolders = []; rawFiles = []; items = [];
   selKeys.clear(); cursor = -1; truncated = false;
-  nextToken = null; moreBusy = false; capHidden = 0; matchTotal = 0;
+  nextToken = null; moreBusy = false; matchTotal = 0; viewPage = 0;
   updateChrome();
   buildAddr();
   showState('st-none');
@@ -1052,7 +1054,7 @@ async function load() {
   selKeys.clear();
   updateSelUI();
   rawFolders = []; rawFiles = [];
-  nextToken = null; moreBusy = false;
+  nextToken = null; moreBusy = false; viewPage = 0;
 
   try {
     const data = await s3api('listObjectsV2', {
@@ -1085,6 +1087,39 @@ async function load() {
    filter widen to cover everything loaded so far. The scroll position is held
    because render() rewrites the list wholesale and would otherwise throw the
    reader back to the top of a listing they were already deep into. */
+/* What matters is whether the crypto is actually there, not what the URL looks
+   like. Chrome treats a file:// page as a secure context, so opening the two
+   files straight off disk gives you working encrypted files — the old check
+   guessed from the protocol and told you the opposite. Three cases:
+   working and served securely (say nothing), working from a local file (worth
+   a word, but nothing is broken), and genuinely unavailable. */
+function showOriginNotice() {
+  const box = el('tls-warn'), banner = el('tls-warn-b'), txt = el('tls-warn-t');
+  const h = location.hostname;
+  const httpsOrLocal = location.protocol === 'https:' || h === 'localhost' || h === '127.0.0.1';
+
+  if (!cryptoOK()) {
+    banner.classList.remove('soft');
+    txt.innerHTML = `<code style="font-family:var(--mo)">crypto.subtle</code> is missing on this origin, `
+      + `so the encrypted-file features are switched off. Serve this page over HTTPS, from `
+      + `<code style="font-family:var(--mo)">localhost</code>, or open the file directly from disk. `
+      + `Everything else works.`;
+    box.classList.remove('hidden');
+    return;
+  }
+
+  if (httpsOrLocal) { box.classList.add('hidden'); return; }
+
+  banner.classList.add('soft');
+  txt.innerHTML = location.protocol === 'file:'
+    ? `Running from a local file. Encrypted save and load work here, and nothing leaves the page — `
+      + `but a page opened off disk cannot be verified, so only run a copy you trust.`
+    : `This page is not served over HTTPS. Encrypted files still work, but anyone on the network `
+      + `can alter the page before it reaches you, and a swapped-out script would see your keys. `
+      + `Prefer HTTPS or a local copy.`;
+  box.classList.remove('hidden');
+}
+
 async function loadMore() {
   if (!S3 || !nextToken || moreBusy) return;
   moreBusy = true;
@@ -1117,28 +1152,48 @@ function renderMore() {
   // a filter that found nothing here may well match on a later page.
   const relevant = !el('st-list').classList.contains('hidden')
                 || !el('st-nomatch').classList.contains('hidden');
-  if ((!nextToken && !capHidden) || !relevant) {
+  const paged = pageCount > 1;
+  if ((!nextToken && !paged) || !relevant) {
     box.classList.add('hidden'); box.innerHTML = ''; return;
   }
 
   const loaded = rawFolders.length + rawFiles.length;
   box.classList.remove('hidden');
 
-  // Two different facts can want saying here: more pages exist on the server,
-  // and more rows are loaded than are being drawn. Either, or both.
-  let note;
-  if (capHidden) {
-    note = `Showing ${items.length.toLocaleString()} of ${matchTotal.toLocaleString()} `
-         + `${filterQ ? 'matching rows' : 'loaded rows'} — sort or filter to bring others into view`;
-  } else {
-    note = `${loaded.toLocaleString()} loaded${filterQ ? ' — the filter only searches these' : ''}`;
+  // Two different things can be paged and they must not be confused. Moving
+  // through rows already in hand is instant; fetching another 1,000 from the
+  // bucket is a request. So they are separate controls, worded differently.
+  let html = '';
+  if (paged) {
+    const from = (viewStart + 1).toLocaleString();
+    const to = (viewStart + items.length).toLocaleString();
+    html += `
+      <button class="btn btn-s btn-sm" onclick="viewPageBy(-1)"${viewPage === 0 ? ' disabled' : ''}
+              aria-label="Previous rows">←</button>
+      <span class="more-n">Rows <b>${from}–${to}</b> of ${matchTotal.toLocaleString()}${filterQ ? ' matching' : ''}
+        · page ${viewPage + 1} of ${pageCount.toLocaleString()}</span>
+      <button class="btn btn-s btn-sm" onclick="viewPageBy(1)"${viewPage >= pageCount - 1 ? ' disabled' : ''}
+              aria-label="Next rows">→</button>`;
   }
+  if (nextToken) {
+    html += `
+      <button class="btn btn-s btn-sm" onclick="loadMore()"${moreBusy ? ' disabled' : ''}>
+        <svg class="ic ic-sm"><use href="#i-down"/></svg> ${moreBusy ? 'Loading…' : 'Fetch next 1,000 from the bucket'}
+      </button>`;
+    if (!paged) html += `<span class="more-n">${loaded.toLocaleString()} loaded${filterQ ? ' — the filter only searches these' : ''}</span>`;
+  }
+  box.innerHTML = html;
+}
 
-  box.innerHTML = (nextToken ? `
-    <button class="btn btn-s btn-sm" onclick="loadMore()"${moreBusy ? ' disabled' : ''}>
-      <svg class="ic ic-sm"><use href="#i-down"/></svg> ${moreBusy ? 'Loading…' : 'Load next 1,000'}
-    </button>` : '')
-    + `<span class="more-n">${note}</span>`;
+/* Stepping the window is pure rendering — no request, so it can go straight to
+   the top of the new page the way turning a page should. */
+function viewPageBy(d) {
+  const want = viewPage + d;
+  if (want < 0 || want > pageCount - 1) return;
+  viewPage = want;
+  cursor = -1;
+  render();
+  el('scroll').scrollTop = 0;
 }
 
 async function refresh() {
@@ -1200,12 +1255,15 @@ function render() {
   const dirMul = sortKey === 'name' && sortDir === 'desc' ? -1 : 1;
   ff.sort((a, b) => NAME_COLL.compare(a.name, b.name) * dirMul);
 
-  items = [...ff, ...ft];
-  // Cap after sorting, never before: the rows shown must be the first ones in
-  // the order the reader asked for, not an arbitrary slice of the fetch order.
-  matchTotal = items.length;
-  capHidden = Math.max(0, matchTotal - RENDER_CAP);
-  if (capHidden) items = items.slice(0, RENDER_CAP);
+  // Slice a window out of the sorted result, never out of the fetch order: the
+  // rows on screen have to be a real position in the order that was asked for.
+  const all = [...ff, ...ft];
+  matchTotal = all.length;
+  pageCount = Math.max(1, Math.ceil(matchTotal / RENDER_CAP));
+  if (viewPage > pageCount - 1) viewPage = pageCount - 1;
+  if (viewPage < 0) viewPage = 0;
+  viewStart = viewPage * RENDER_CAP;
+  items = all.slice(viewStart, viewStart + RENDER_CAP);
 
   if (!items.length) {
     const totalRaw = rawFolders.length + rawFiles.length;
@@ -1397,6 +1455,7 @@ function setSort(k) {
   if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
   else { sortKey = k; sortDir = 'asc'; }
   syncSort();
+  viewPage = 0;        // a new order makes the old page number meaningless
   render();
 }
 function syncSort() {
@@ -1411,6 +1470,7 @@ function onSeek() {
   filterQ = el('seek').value.trim();
   el('seek-x').classList.toggle('hidden', !filterQ);
   cursor = -1;
+  viewPage = 0;
   render();
 }
 function clearSeek() {
@@ -1478,7 +1538,9 @@ function paletteSources() {
     A('Upload files', 'i-up', triggerUpload);
     A('New folder', 'i-dir-plus', showMkdir);
     A('Refresh', 'i-refresh', refresh, 'R');
-    if (nextToken) A('Load next 1,000 objects', 'i-down', loadMore, 'M');
+    if (nextToken) A('Fetch next 1,000 objects from the bucket', 'i-down', loadMore, 'M');
+    if (pageCount > 1 && viewPage < pageCount - 1) A('Next page of rows', 'i-level-up', () => viewPageBy(1), ']');
+    if (viewPage > 0) A('Previous page of rows', 'i-level-up', () => viewPageBy(-1), '[');
     if (prefix) A('Up one prefix', 'i-level-up', goUp, '⌫');
     A(viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view', viewMode === 'list' ? 'i-grid' : 'i-list', () => setView(viewMode === 'list' ? 'grid' : 'list'), 'G');
     A(hidePlaceholders ? 'Show placeholder files' : 'Hide placeholder files', hidePlaceholders ? 'i-eye' : 'i-eye-off', togglePlaceholders, 'H');
@@ -2194,7 +2256,7 @@ function applyLoaded(incoming, wantActive, mode) {
     if (hadActive && hadActive !== activeConnId) {
       S3 = null; bucket = ''; prefix = '';
       rawFolders = []; rawFiles = []; items = []; selKeys.clear();
-      nextToken = null; moreBusy = false; truncated = false; capHidden = 0;
+      nextToken = null; moreBusy = false; truncated = false; viewPage = 0;
       updateChrome(); buildAddr(); showState('st-none');
     }
     return { total: connections.length, added: connections.length, skipped: 0 };
@@ -2219,7 +2281,7 @@ function renderStorageUI() {
 
   if (!cryptoOK()) {
     chip.textContent = 'Session only';
-    note.innerHTML = `<code>crypto.subtle</code> is unavailable on this origin, so encrypted files are off. `
+    note.innerHTML = `<code>crypto.subtle</code> is missing on this origin, so encrypted files are off. `
       + `Credentials stay in <code>sessionStorage</code> for this tab.`;
     acts.innerHTML = `<button class="btn btn-d btn-sm btn-blk" onclick="clearSession()">
       <svg class="ic ic-sm"><use href="#i-broom"/></svg> Clear session</button>`;

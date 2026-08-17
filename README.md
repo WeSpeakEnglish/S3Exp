@@ -35,7 +35,7 @@ Live: [try it now!](https://wespeakenglish.github.io/S3Exp/)
 
 Already have a `.s3vault` file from an earlier session? Click **Load from file** instead.
 
-> **Serve over HTTPS if you host it.** Running from `file://` or `localhost` is fine. On a plain-`http://` origin, browsers withhold `crypto.subtle`, so the encrypted-file features are disabled — everything else still works.
+> **Serve over HTTPS if you host it.** Opening the files straight off disk (`file://`) or from `localhost` is fine — browsers count both as secure contexts, so the encrypted save and load work there. On a plain-`http://` origin served to others, `crypto.subtle` may be withheld and those features switch off; everything else still works. The sidebar says which situation you are in, and only calls it a problem when the crypto is actually missing.
 
 ---
 
@@ -64,7 +64,8 @@ S3 has no folders. A "folder" is just a set of keys that share a prefix, and the
 | `⌘A` / `Ctrl A` | Select everything in view |
 | `/` | Focus the filter |
 | `R` | Refresh |
-| `M` | Load the next 1,000 objects, when the listing is partial |
+| `M` | Fetch the next 1,000 objects from the bucket, when the listing is partial |
+| `[` / `]` | Previous / next page of drawn rows |
 | `G` | Toggle list / grid view |
 | `H` | Toggle hiding placeholder files |
 | `Delete` | Delete the selection |
@@ -185,8 +186,9 @@ Enter the URL in the **Endpoint** field. Path-style requests and Signature V4 ar
 ## Limits and behaviour worth knowing
 
 - **Large prefixes arrive a page at a time.** S3 answers a listing with at most 1,000 entries, so a bigger prefix loads in pages. The status bar shows *Partial listing — 2,001 loaded* with a **load next 1,000** link beside it, and the same action sits at the foot of the list, in the command palette, and on the `M` key — the status bar is the one part always on screen, so you never have to scroll a thousand rows to find the control. Each click costs the same no matter how much is already loaded.
-- **At most 2,000 rows are drawn at once.** There is no virtual scroller here — every row is real DOM — and drawing 25,000 of them means a 22 MB HTML string and a list a kilometre tall, where the browser's layout pass alone takes tens of seconds and every sort freezes the tab. So loading is unbounded but rendering is capped: the footer tells you when it is capped (*Showing 2,000 of 25,012 loaded rows*), and the status bar always counts everything loaded, not just what is on screen.
-- **The filter and the sort see every loaded page**, not just the drawn rows, and the cap is applied after sorting — so sorting by date and reading the top 2,000 is a real answer, and filtering for a key that sits at position 24,999 finds it. Both widen as you load more pages. If a filter finds nothing while pages remain, the footer says the filter only searched what has arrived.
+- **At most 2,000 rows are drawn at once, and you page through the rest.** There is no virtual scroller here — every row is real DOM — and drawing 25,000 of them means a 22 MB HTML string and a list a kilometre tall, where the layout pass alone takes tens of seconds and every sort freezes the tab. So the drawn window is capped and the footer moves it: *Rows 2,001–4,000 of 8,999 · page 2 of 5*, with `[` and `]` on the keyboard. Turning a page is instant, since those rows are already in hand.
+- **Two kinds of paging, deliberately worded apart.** **←** and **→** move through rows already loaded; **Fetch next 1,000 from the bucket** is a request to S3. The status bar counts everything loaded, not just what is on screen.
+- **The filter and the sort see every loaded page**, not just the drawn window, and the window is sliced after sorting — so sorting by date and reading page 1 is a real answer, and filtering for a key at position 24,999 finds it. Changing the sort or the filter returns you to page 1, because the old page number would no longer mean anything.
 - **Select all covers the drawn rows**, not the whole prefix. Deleting a *folder* is different: that enumerates every page itself, so it does not miss anything.
 - **Deleting a folder deletes everything inside it.** Removing `logs/` recursively deletes every object stored under that prefix, including nested folders — the same as Cyberduck, Transmit, or the AWS Console. This can mean a lot of objects behind one confirmation, so double-check the prefix before confirming.
 - **Placeholder files are hidden by default.** Zero-byte marker files that other tools drop into a prefix to keep it visible — `.file_placeholder`, `.keep`, `.gitkeep`, `.s3keep`, `.bzEmpty`, `.placeholder`, `.dir`, `.emptyfolderplaceholder` — are hidden from the listing automatically. They still exist in the bucket; toggle them back on with the eye icon in the toolbar, the `H` key, the command palette, or the link in the status bar. Object counts and total size in the status bar reflect only what's currently visible.
