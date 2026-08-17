@@ -404,12 +404,15 @@
 
 <!-- Upload progress -->
 <div class="back" id="m-upload">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-upload-t">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-upload-t" tabindex="-1">
     <div class="m-h">
       <div class="m-t" id="m-upload-t">Uploading</div>
     </div>
     <div class="m-b"><div class="ups" id="up-list"></div></div>
-    <div class="m-f"><button class="btn btn-p" id="up-done" disabled onclick="hideModal('m-upload');refresh()">Done</button></div>
+    <div class="m-f">
+      <button class="btn btn-s" id="up-cancel" onclick="cancelUpload()">Cancel</button>
+      <button class="btn btn-p" id="up-done" disabled onclick="hideModal('m-upload');refresh()">Done</button>
+    </div>
   </div>
 </div>
 
@@ -635,7 +638,13 @@ function onKey(e) {
 
   if (e.key === 'Escape') {
     const open = [...document.querySelectorAll('.back.on')].pop();
-    if (open) { hideModal(open.id); return; }
+    if (open) {
+      // Hiding a running upload would leave the transfers going unseen, so
+      // Escape cancels them instead; a second press closes the dialog.
+      if (open.id === 'm-upload' && upBusy) { cancelUpload(); return; }
+      hideModal(open.id);
+      return;
+    }
     if (el('addr').classList.contains('edit')) { cancelAddr(); return; }
     if (filterQ) { clearSeek(); return; }
     if (selKeys.size) { clearSel(); return; }
@@ -1422,12 +1431,58 @@ function handleFileInput() {
   if (inp.files.length) { doUpload([...inp.files]); inp.value = ''; }
 }
 
+/* Cancellation state. `upActive` holds the ManagedUpload objects currently in
+   flight so Cancel can abort them; queued jobs check the flag before they
+   start. Files that already finished stay in the bucket — a cancel stops the
+   queue, it does not undo completed transfers. */
+let upBusy = false, upCancelled = false;
+const upActive = new Set();
+
+function cancelUpload() {
+  if (!upBusy || upCancelled) return;
+  upCancelled = true;
+  const b = el('up-cancel');
+  b.disabled = true;
+  b.textContent = 'Cancelling…';
+  // In-flight transfers reject through their catch; anything still queued is
+  // marked as it comes up in runOne.
+  upActive.forEach(u => { try { u.abort(); } catch (_) {} });
+}
+
+/* `fill` is false for a cancelled row: the bar keeps whatever fraction it had
+   actually sent, because filling it would read as finished. */
+function upRow(uid, label, cls, color, fill = true) {
+  const be = el(`${uid}-b`), pe = el(`${uid}-p`);
+  if (be) { if (fill) be.style.width = '100%'; be.classList.add(cls); }
+  if (pe) { pe.textContent = label; if (color) pe.style.color = color; }
+}
+
+// An aborted request surfaces differently across SDK versions, so match on
+// either shape rather than trusting one code.
+const isAbort = err =>
+  err && (err.code === 'RequestAbortedError' || /abort/i.test(err.message || ''));
+
 async function doUpload(files) {
   if (!S3 || !files.length) return;
+  if (upBusy) { toast('An upload is already running', 'inf'); return; }
+  upBusy = true;
+  upCancelled = false;
+  upActive.clear();
   showModal('m-upload');
   el('up-list').innerHTML = '';
   el('up-done').disabled = true;
+  const cbtn = el('up-cancel');
+  cbtn.classList.remove('hidden');
+  cbtn.disabled = false;
+  cbtn.textContent = 'Cancel';
   el('m-upload-t').textContent = `Uploading ${files.length} file${files.length === 1 ? '' : 's'}`;
+  // showModal focuses the first control, which is now Cancel — a stray Enter
+  // would kill the queue. Park focus on the dialog itself instead; Tab still
+  // reaches the buttons.
+  setTimeout(() => {
+    const m = el('m-upload').querySelector('.modal');
+    if (m && el('m-upload').classList.contains('on')) m.focus();
+  }, 40);
 
   // Every row is drawn up front so the whole queue is visible, then the
   // transfers run a few at a time. Handing the browser fifty simultaneous
@@ -1446,13 +1501,16 @@ async function doUpload(files) {
     return { file, uid };
   });
 
-  let failed = 0, next = 0;
+  let failed = 0, stopped = 0, next = 0;
 
   const runOne = ({ file, uid }) => new Promise(resolve => {
+    if (upCancelled) { stopped++; upRow(uid, 'cancelled', 'off', null, false); return resolve(); }
+
     const up = S3.upload({
       Bucket: bucket, Key: prefix + file.name, Body: file,
       ContentType: file.type || 'application/octet-stream',
     });
+    upActive.add(up);
 
     up.on('httpUploadProgress', p => {
       const pct = p.total ? Math.round(p.loaded / p.total * 100) : 0;
@@ -1462,29 +1520,42 @@ async function doUpload(files) {
     });
 
     up.promise()
-      .then(() => {
-        const be = el(`${uid}-b`), pe = el(`${uid}-p`);
-        if (be) { be.style.width = '100%'; be.classList.add('ok'); }
-        if (pe) pe.textContent = 'done';
-      })
+      .then(() => upRow(uid, 'done', 'ok'))
       .catch(err => {
-        failed++;
-        const be = el(`${uid}-b`), pe = el(`${uid}-p`);
-        if (be) { be.style.width = '100%'; be.classList.add('no'); }
-        if (pe) { pe.textContent = 'failed'; pe.style.color = 'var(--red)'; pe.title = err.message || ''; }
+        if (upCancelled || isAbort(err)) {
+          stopped++;
+          upRow(uid, 'cancelled', 'off', null, false);
+        } else {
+          failed++;
+          upRow(uid, 'failed', 'no', 'var(--red)');
+          const pe = el(`${uid}-p`);
+          if (pe) pe.title = err.message || '';
+        }
       })
-      .finally(resolve);
+      .finally(() => { upActive.delete(up); resolve(); });
   });
 
   await Promise.all(Array.from({ length: Math.min(LANES, jobs.length) }, async () => {
     while (next < jobs.length) await runOne(jobs[next++]);
   }));
 
+  upBusy = false;
+  upActive.clear();
+  el('up-cancel').classList.add('hidden');
   el('up-done').disabled = false;
-  const ok = files.length - failed;
-  el('m-upload-t').textContent = failed ? `Uploaded ${ok} of ${files.length}` : 'Upload complete';
-  if (failed) toast(`${failed} of ${files.length} failed to upload`, 'err');
-  else toast(`Uploaded ${ok} file${ok === 1 ? '' : 's'}`, 'ok');
+  el('up-done').focus();
+
+  const ok = files.length - failed - stopped;
+  if (stopped) {
+    el('m-upload-t').textContent = `Cancelled · ${ok} of ${files.length} uploaded`;
+    toast(`Upload cancelled — ${ok} of ${files.length} finished`, 'inf');
+  } else if (failed) {
+    el('m-upload-t').textContent = `Uploaded ${ok} of ${files.length}`;
+    toast(`${failed} of ${files.length} failed to upload`, 'err');
+  } else {
+    el('m-upload-t').textContent = 'Upload complete';
+    toast(`Uploaded ${ok} file${ok === 1 ? '' : 's'}`, 'ok');
+  }
 }
 
 function setupDrop() {

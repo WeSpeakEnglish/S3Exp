@@ -66,7 +66,7 @@ S3 has no folders. A "folder" is just a set of keys that share a prefix, and the
 | `G` | Toggle list / grid view |
 | `H` | Toggle hiding placeholder files |
 | `Delete` | Delete the selection |
-| `Escape` | Close a dialog, then clear the filter, then clear the selection |
+| `Escape` | Cancel a running upload, then close a dialog, then clear the filter, then clear the selection |
 
 Typing shortcuts are ignored while a text field has focus. Mouse selection also supports shift-click for a range and `⌘`/`Ctrl`-click to toggle one item.
 
@@ -173,6 +173,7 @@ Enter the URL in the **Endpoint** field. Path-style requests and Signature V4 ar
 - **Deleting a folder deletes everything inside it.** Removing `logs/` recursively deletes every object stored under that prefix, including nested folders — the same as Cyberduck, Transmit, or the AWS Console. This can mean a lot of objects behind one confirmation, so double-check the prefix before confirming.
 - **Placeholder files are hidden by default.** Zero-byte marker files that other tools drop into a prefix to keep it visible — `.file_placeholder`, `.keep`, `.gitkeep`, `.s3keep`, `.bzEmpty`, `.placeholder`, `.dir`, `.emptyfolderplaceholder` — are hidden from the listing automatically. They still exist in the bucket; toggle them back on with the eye icon in the toolbar, the `H` key, the command palette, or the link in the status bar. Object counts and total size in the status bar reflect only what's currently visible.
 - **New folder** writes a zero-byte object whose key ends in `/`, which is how a prefix becomes visible in listings.
+- **Cancelling an upload** stops the queue; it does not undo transfers that already finished. Files uploaded before you clicked **Cancel** stay in the bucket, a file interrupted mid-transfer is not written, and the dialog reports how many of the batch made it.
 - **Multiple downloads** are started one at a time with a short pause. Your browser may still ask permission for more than a few.
 - **Link lifetimes:** download links are signed for 60 seconds, grid thumbnails for 15 minutes, and share links for whatever you pick in the dialog.
 
