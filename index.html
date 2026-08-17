@@ -1878,7 +1878,7 @@ async function listAllUnderPrefix(pfx, opts = {}) {
     for (const o of (data.Contents || [])) keys.push(o.Key);
     // Reported per page, not per key: a prefix with 40,000 objects is 40 calls,
     // and without this the dialog would sit on "Preparing…" for all of them.
-    if (opts.onCount) opts.onCount(keys.length);
+    if (opts.onCount) await opts.onCount(keys.length);
     if (opts.stop && opts.stop()) break;
     token = data.IsTruncated ? data.NextContinuationToken : undefined;
   } while (token);
@@ -1918,6 +1918,15 @@ function deleteSelected() { if (selKeys.size) askDelete([...selKeys]); }
 
 /* ── Delete progress ──────────────────────────────────────────────── */
 let delBusy = false, delAbort = false;
+
+/* Two frames: one to apply the style change, one to be sure it was painted.
+   Without this the loop can issue its next request in the same frame the
+   progress was written, so a fast provider paints nothing until the last
+   batch and the whole operation looks like a single jump at the end. Costs
+   ~32ms against a network round trip — invisible. */
+function paintTick() {
+  return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
 
 function delpSet({ stage, count, pct, note, ind }) {
   if (stage !== undefined) el('delp-stage').textContent = stage;
@@ -1965,6 +1974,7 @@ async function confirmDelete() {
     el('m-delp-t').textContent = 'Deleting';
     delpSet({ stage: 'Preparing…', count: '', pct: 0, note: '', ind: false });
     showModal('m-delp');
+    await paintTick();          // the dialog must be on screen before work starts
   }
 
   try {
@@ -1986,7 +1996,10 @@ async function confirmDelete() {
         if (delAbort) break;
         const under = await listAllUnderPrefix(d, {
           stop: () => delAbort,
-          onCount: n => delpSet({ count: (base + n).toLocaleString() + ' found' }),
+          onCount: async n => {
+            delpSet({ count: (base + n).toLocaleString() + ' found' });
+            await paintTick();
+          },
         });
         allKeys.push(...(under.length ? under : [d]));   // fall back to marker if truly empty
         base = allKeys.length;
@@ -2001,22 +2014,37 @@ async function confirmDelete() {
     }
 
     const total = allKeys.length;
+    const batches = Math.ceil(total / 1000);
     let done = 0;
-    delpSet({ stage: 'Deleting…', ind: false, note: 'This cannot be undone.' });
+    // State the total before the first request rather than after it, so the
+    // dialog reads "0 of 8,910" while that first batch is in flight instead of
+    // showing nothing until it lands.
+    delpSet({
+      stage: 'Deleting…', ind: false, pct: 0,
+      count: `0 of ${total.toLocaleString()}`,
+      note: `Batch 1 of ${batches} · this cannot be undone.`,
+    });
+    await paintTick();
 
     // deleteObjects accepts at most 1000 keys per call — batch it.
     for (let i = 0; i < total; i += 1000) {
       if (delAbort) break;
       const batch = allKeys.slice(i, i + 1000);
+      const nth = Math.floor(i / 1000) + 1;
+      delpSet({ note: `Batch ${nth} of ${batches} · this cannot be undone.` });
+      await paintTick();
+
       if (batch.length === 1) await s3api('deleteObject', { Bucket: bucket, Key: batch[0] });
       else await s3api('deleteObjects', {
         Bucket: bucket, Delete: { Objects: batch.map(k => ({ Key: k })), Quiet: true },
       });
+
       done += batch.length;
       delpSet({
         count: `${done.toLocaleString()} of ${total.toLocaleString()}`,
         pct: Math.round(done / total * 100),
       });
+      await paintTick();
     }
 
     selKeys.clear();
