@@ -833,7 +833,7 @@ function renderConns() {
     const on = c.id === activeConnId;
     const name = x(c.label || c.bkt);
     return `<div class="conn${on ? ' on' : ''}">
-      <button class="conn-main" data-id="${x(c.id)}" title="${name}"${on ? ' aria-current="true"' : ''}>
+      <button class="conn-main" data-id="${x(c.id)}" title="${name} — ${x(sub)}"${on ? ' aria-current="true"' : ''}>
         <span class="conn-d"></span>
         <span class="conn-b">
           <span class="conn-n">${name}</span>

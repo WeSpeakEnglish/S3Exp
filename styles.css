@@ -182,9 +182,12 @@ button.addr-bkt:hover{background:var(--s2)}
 }
 .conn-d{width:6px;height:6px;border-radius:50%;background:var(--ink3);flex:none}
 .conn.on .conn-d{background:var(--amber);box-shadow:0 0 0 3px rgba(232,163,61,.18)}
-.conn-b{min-width:0;flex:1}
-.conn-n{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conn-b{min-width:0;flex:1;display:block}
+/* Both of these are spans, and text-overflow is ignored on an inline box —
+   they have to be blocks for the ellipsis below to do anything. */
+.conn-n{display:block;font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .conn-s{
+  display:block;
   font-family:var(--mo);font-size:10.5px;color:var(--ink3);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;
 }
