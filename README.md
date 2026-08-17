@@ -64,6 +64,7 @@ S3 has no folders. A "folder" is just a set of keys that share a prefix, and the
 | `⌘A` / `Ctrl A` | Select everything in view |
 | `/` | Focus the filter |
 | `R` | Refresh |
+| `M` | Load the next 1,000 objects, when the listing is partial |
 | `G` | Toggle list / grid view |
 | `H` | Toggle hiding placeholder files |
 | `Delete` | Delete the selection |
@@ -183,7 +184,7 @@ Enter the URL in the **Endpoint** field. Path-style requests and Signature V4 ar
 
 ## Limits and behaviour worth knowing
 
-- **Large prefixes arrive a page at a time.** S3 answers a listing with at most 1,000 entries, so a bigger prefix loads in pages. A **Load next 1,000** button appears at the foot of the list with a running count, and the status bar reads *Partial listing — 2,001 of more* until the last page lands. Each click costs the same no matter how much is already loaded.
+- **Large prefixes arrive a page at a time.** S3 answers a listing with at most 1,000 entries, so a bigger prefix loads in pages. The status bar shows *Partial listing — 2,001 loaded* with a **load next 1,000** link beside it, and the same action sits at the foot of the list, in the command palette, and on the `M` key — the status bar is the one part always on screen, so you never have to scroll a thousand rows to find the control. Each click costs the same no matter how much is already loaded.
 - **At most 2,000 rows are drawn at once.** There is no virtual scroller here — every row is real DOM — and drawing 25,000 of them means a 22 MB HTML string and a list a kilometre tall, where the browser's layout pass alone takes tens of seconds and every sort freezes the tab. So loading is unbounded but rendering is capped: the footer tells you when it is capped (*Showing 2,000 of 25,012 loaded rows*), and the status bar always counts everything loaded, not just what is on screen.
 - **The filter and the sort see every loaded page**, not just the drawn rows, and the cap is applied after sorting — so sorting by date and reading the top 2,000 is a real answer, and filtering for a key that sits at position 24,999 finds it. Both widen as you load more pages. If a filter finds nothing while pages remain, the footer says the filter only searched what has arrived.
 - **Select all covers the drawn rows**, not the whole prefix. Deleting a *folder* is different: that enumerates every page itself, so it does not miss anything.

@@ -711,6 +711,7 @@ function onKey(e) {
     }
     case 'Delete': if (selKeys.size) deleteSelected(); break;
     case 'r': case 'R': refresh(); break;
+    case 'm': case 'M': loadMore(); break;
     case 'g': case 'G': setView(viewMode === 'list' ? 'grid' : 'list'); break;
     case 'h': case 'H': togglePlaceholders(); break;
   }
@@ -998,8 +999,16 @@ function updateStatus() {
   el('st-endpoint').textContent = right;
   el('st-trunc').classList.toggle('hidden', !truncated);
   if (truncated) {
-    el('st-trunc-t').textContent =
-      `Partial listing — ${(rawFolders.length + rawFiles.length).toLocaleString()} of more`;
+    // The button at the foot of the list is a thousand rows away. This notice
+    // is the one part of a partial listing that is always on screen, so it has
+    // to be the thing you can act on.
+    const loaded = (rawFolders.length + rawFiles.length).toLocaleString();
+    el('st-trunc-t').innerHTML = moreBusy
+      ? `Partial listing — ${loaded} loaded · loading…`
+      : `Partial listing — ${loaded} loaded · `
+        + `<a href="#" class="lnk" onclick="loadMore();return false;">load next 1,000</a>`;
+  } else {
+    el('st-trunc-t').innerHTML = '';   // no stale text left inside the hidden notice
   }
   renderMore();
   const sh = el('st-hidden');
@@ -1079,7 +1088,7 @@ async function load() {
 async function loadMore() {
   if (!S3 || !nextToken || moreBusy) return;
   moreBusy = true;
-  renderMore();
+  updateStatus();          // repaints the footer and the status-bar notice
 
   const sc = el('scroll');
   const keepTop = sc.scrollTop;
@@ -1097,7 +1106,7 @@ async function loadMore() {
     // A failed page leaves the token intact, so the button stays usable and
     // nothing already listed is lost.
     moreBusy = false;
-    renderMore();
+    updateStatus();
     toast(err.message || 'Could not load the next page', 'err');
   }
 }
@@ -1469,6 +1478,7 @@ function paletteSources() {
     A('Upload files', 'i-up', triggerUpload);
     A('New folder', 'i-dir-plus', showMkdir);
     A('Refresh', 'i-refresh', refresh, 'R');
+    if (nextToken) A('Load next 1,000 objects', 'i-down', loadMore, 'M');
     if (prefix) A('Up one prefix', 'i-level-up', goUp, '⌫');
     A(viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view', viewMode === 'list' ? 'i-grid' : 'i-list', () => setView(viewMode === 'list' ? 'grid' : 'list'), 'G');
     A(hidePlaceholders ? 'Show placeholder files' : 'Hide placeholder files', hidePlaceholders ? 'i-eye' : 'i-eye-off', togglePlaceholders, 'H');

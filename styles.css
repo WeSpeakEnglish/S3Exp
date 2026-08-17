@@ -371,7 +371,8 @@ button.addr-bkt:hover{background:var(--s2)}
   background:var(--s1);font-family:var(--mo);font-size:11px;color:var(--ink3);
 }
 .status b{color:var(--ink2);font-weight:500}
-.warn-i{color:var(--amber);display:inline-flex;align-items:center;gap:5px}
+.status > *{white-space:nowrap}
+.warn-i{color:var(--amber);display:inline-flex;align-items:center;gap:5px;flex:none}
 .selbar{
   position:absolute;left:50%;bottom:42px;transform:translate(-50%,14px);
   display:flex;align-items:center;gap:8px;padding:7px 8px 7px 14px;
